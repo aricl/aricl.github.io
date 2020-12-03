@@ -428,13 +428,9 @@ function addCommas(nStr) {
                 table: "#table_cbd06cec4",
                 fields: [
                   {
-                    label: "Flats",
+                    label: "All Units",
                     name: "1_"
                   },
-                    {
-                        label: "Houses",
-                        name: "2_"
-                    }
                 ]
             } );
 
