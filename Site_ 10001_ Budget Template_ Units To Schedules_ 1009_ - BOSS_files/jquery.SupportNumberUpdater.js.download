@@ -1,0 +1,50 @@
+/**
+ * jquery.SupportNumberUpdater
+ *
+ * Updates the support menu item with the number of watched tickets.
+ *
+ * @author Robert Corley
+ */
+;(function( $ ){
+    var methods = {
+
+        /**
+         * Constructor
+         */
+        init : function() {
+            return $(this);
+        },
+
+        /**
+         * Update
+         */
+        update : function() {
+
+            $.get('/support/watched_ticket_counter', function (number) {
+                if (number > 0) {
+                    $('.support').addClass('hasWatchedTickets');
+                } else {
+                    number = '';
+                    $('.support').removeClass('hasWatchedTickets');
+                }
+                $('.support').attr('data-content', number);
+            });
+
+            return $(this);
+        }
+
+    };
+
+    /**
+     * Setup method handler
+     */
+    $.fn.SupportNumberUpdater = function( method ) {
+        if ( methods[method] ) {
+            return methods[ method ].apply( this, Array.prototype.slice.call( arguments, 1 ));
+        } else if ( typeof method === 'object' || ! method ) {
+            return methods.init.apply( this, arguments );
+        } else {
+            $.error( 'Method ' +  method + ' does not exist on jQuery.SupportNumberUpdater' );
+        }
+    };
+})( jQuery );

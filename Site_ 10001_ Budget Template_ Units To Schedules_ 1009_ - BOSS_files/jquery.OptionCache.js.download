@@ -1,0 +1,91 @@
+/**
+ * jquery.OptionCache
+ * 
+ * Option cache allows form select and autofill options for modal forms to be
+ * downloaded on the main page load instead of downloading them on the ajax
+ * request for the model form.
+ *
+ * @author Robert Corley
+ */
+;(function($) {
+    $.widget( "gigabyte.OptionCache", {
+    
+        /**
+         * Default Options
+         */
+        options: {
+            cached: '',
+            number_to_load: 0,
+            number_loaded: 0,
+            loaded: false
+        },
+    
+        /**
+         * Constructor
+         */
+        _create: function( options ) {
+            return this;
+        },
+
+        /**
+         * Load
+         * 
+         * Loads an option and stores it as JSON.
+         */
+        load: function( options ) {
+            var that = this;
+            that.options.cached += options.hash;
+            // $.getJSON(options.url, function( data ){
+            //     that.options[options.hash] = data;
+            //
+            //     that.options.number_loaded++;
+            //     if (that.options.number_loaded == that.options.number_to_load) {
+            //         that.options.loaded = true;
+            //         $(document).trigger('optioncache.loaded');
+            //     }
+            // });
+            $.ajax({
+                dataType: 'json',
+                url: options.url,
+                headers: {
+                    'Cache-Control': 'max-age=3600'
+                },
+                success: function( data ) {
+                    that.options[options.hash] = data;
+                    that.options.number_loaded++;
+                    if (that.options.number_loaded == that.options.number_to_load) {
+                        that.options.loaded = true;
+                        $(document).trigger('optioncache.loaded');
+                    }
+                }
+            });
+            
+        },
+
+        /**
+         * Is Loaded?
+         * 
+         * Return true or false depending on whether the options are loaded or
+         * not. Optionally pass the hash for an option to check for a specific
+         * option.
+         */
+        is_loaded: function( hash ) {
+            if (hash) {
+                return Boolean(this.options[hash]);
+            } else {
+                return this.options.loaded;
+            }
+        },
+
+        /**
+         * Query String
+         * 
+         * Returns the ?cached=[hashes] query string to append to any ajax calls
+         * to stop the request for the modal form from loading and returning the
+         * the cached options in the response.
+         */
+        query_string: function() {
+            return '?cached=' + this.options.cached;
+        }
+    });
+})(jQuery);

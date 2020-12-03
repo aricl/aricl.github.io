@@ -1,0 +1,69 @@
+/**
+ * jquery.Fieldset
+ * 
+ * This allows the text in a fieldset to change depending on the value of
+ * another field, such as a select field.
+ *
+ * @author Robert Corley
+ * 
+ */
+;(function($) {
+    $.widget( "gigabyte.Fieldset", {
+    
+        /**
+         * Default Options
+         * 
+         */
+        options: {
+            title: null,
+            default_title: null,
+            depends_on: null,
+            _title_element: null,
+            _trigger_field: null
+        },
+    
+        /**
+         * Constructor
+         * 
+         */
+        _create: function() {
+            this.options._title_element = $('> h3', this.element);
+            this.options._trigger_field = $('[name="' + this.options.depends_on + '"]');
+            this._setup_handler();
+        },
+
+        // --------------------------------------------------------------------
+
+        /**
+         * Setup Handler
+         * 
+         * Sets up the event handler to change the fieldset title when the
+         * 'depends_on' (trigger field) changes.
+         * 
+         */
+        _setup_handler: function() {
+            var that = this;
+            
+            this.options._trigger_field.on("change", function(element) {
+                that._on_change(this);
+            });
+            that._on_change(this.options._trigger_field);
+        },
+
+        // --------------------------------------------------------------------
+
+        /**
+         * On Change
+         */
+        _on_change: function(element) {
+            var options = this.options;
+            var trigger_value = $(element).val();
+            if (options.title[trigger_value] != undefined) {
+                options._title_element.html(options.title[trigger_value]);
+            } else if (options.default_title) {
+                options._title_element.html(options.default_title);
+            }
+        }
+
+    });
+})(jQuery);

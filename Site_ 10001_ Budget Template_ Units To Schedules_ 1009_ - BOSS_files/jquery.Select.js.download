@@ -1,0 +1,305 @@
+/**
+ * jquery.Select
+ *
+ * This is a wrapper widget for the jquery.Select2 plugin.
+ *
+ * @author Robert Corley
+ *
+ */
+;(function($) {
+    $.widget( "gigabyte.Select", {
+
+        /**
+         * Default Options
+         *
+         * Defaults are actually set in the PHP class FormSelect, explanations
+         * of the options can also be found there.
+         *
+         */
+        options: {
+            values: null,
+            readonly: false,
+            disabled: false,
+            select_first: false,
+            select_single: false,
+            sort_alphabetically: false,
+
+            filtered_by: null,  // Select options to depend on the value of another field, this should be the name of the field
+            clear_on_change: false,
+
+            _select2: null, // select2 instance
+            _filter_element: {},
+            _filtered: false,
+            _select_options: [], // This holds the data for the select options in the [{text: 'blah' id: 9}] format
+            _select_values: [], // array of just the option values, so the first option can be selected by default
+            _debug: false
+        },
+
+        /**
+         * Constructor
+         *
+         */
+        _create: function() {
+            var that = this;
+            var element = that.element;
+
+            this.element.select2('destroy');
+
+            if (that.options._debug) console.log(this.element.attr('name') + ': Data: ' + this.element.val());
+
+            // Inilialize filter by options
+            this.options.form = this.element.parents('form').length ? this.element.parents('form') : document;
+            if (this.options.filtered_by) {
+                if (this.options.filtered_by == '[prev_field]') {
+                    this.options.filtered_by = this.element.closest('.form-group').prev().children('input,select,textarea').attr('name');
+                    if ( ! this.options.filtered_by) {
+                        $.error("Cannot setup filtered_by on select field because the previous field could not be found");
+                    }
+                }
+                this.options._filter_element = $('[name="' + this.options.filtered_by + '"]', this.options.form);
+                this.options._filtered = Boolean(this.options._filter_element.length);
+
+                // Throw error if filtered_by is set but can't find field
+                if ( ! this.options._filtered) {
+                    $.error("Cannot setup filtered_by on select field because a field with name '" + this.options.filtered_by + "' cannot be found");
+                }
+            }
+
+            if (that.options._debug) console.log(this.element.attr('name') + ': _create() called');
+
+            // If data is a string then it must be a hash for the option cache
+            // so wait for the option to be loaded
+            if ($.type(that.options.values) == "string") {
+
+                if (that.options._debug) console.log(that.element.attr('name') + ': ' + 'load options from cache');
+
+                var hash = that.options.values;
+                $(document).on('optioncache.loaded', function(){
+                    if (that.options._debug) console.log(that.element.attr('name') + ': ' + 'setup triggered by optioncache.loaded event');
+                    that.options.values = that._get_cached_options();
+                    that._setup();
+                });
+
+                if (that.options._debug) console.log(this.element.attr('name') + ': is_loaded: ' + $(document).OptionCache( "is_loaded", hash ));
+
+                // Event might have already fired
+                if ($(document).OptionCache( "is_loaded", hash )) {
+                    if (that.options._debug) console.log(that.element.attr('name') + ': ' + 'optioncache.loaded already fired so setup manually run');
+                    that.options.values = that._get_cached_options();
+                    that._setup();
+                }
+            // Options are not cached, they have been passed directly so simply
+            // setup the select field.
+            } else {
+                that._setup();
+            }
+        },
+
+        // --------------------------------------------------------------------
+
+        /**
+         * Get Cached Options
+         *
+         * Gets the select option data from the cache.
+         *
+         */
+        _get_cached_options: function() {
+            if ($.type(this.options.values) != "string") {
+                return this.options.values;
+            } else {
+                var hash = this.options.values;
+                return $(document).OptionCache( "option", hash );
+            }
+        },
+
+        // --------------------------------------------------------------------
+
+        /**
+         * Setup
+         *
+         * This sets up the Select2 jquery plugin. Must be called by _create
+         * otherwise cached options will not be populated from the cache.
+         *
+         */
+        _setup: function() {
+            if ( ! this.options._select2) {
+                var that = this;
+                this.options._select_options = this._get_select_options();
+
+                this.options._select2 = this.element.select2({
+                    initSelection: function(element, callback) {
+                        var selected_value = element.val();
+                        var options = that.options.values;
+                        if(selected_value === undefined || selected_value === null) {
+                            that._default_selection();
+                        } else {
+                            var selected_option = $.grep(that.options._select_options, function(o) {
+                                return o.id == selected_value;
+                            });
+                            if (selected_option.length) {
+                                callback(selected_option[0]);
+                            }
+                        }
+                    },
+                    query: function(options) {
+                        var pageSize = 100;
+                        var startIndex  = (options.page - 1) * pageSize;
+                        var filteredData = that.options._select_options;
+
+                        if( options.term && options.term.length > 0 ) {
+                            if( ! options.context ) {
+                                var term = options.term.toLowerCase();
+                                options.context = that.options._select_options.filter(function(metric) {
+                                    return ( metric.text.toLowerCase().indexOf(term) !== -1 );
+                                });
+                            }
+                            filteredData = options.context;
+                        }
+
+                        options.callback({
+                            context: filteredData,
+                            results: filteredData.slice(startIndex, startIndex + pageSize),
+                            more: (startIndex + pageSize) < filteredData.length
+                        });
+                    },
+                    placeholder: "Please select",
+                    //allowClear: true
+                });
+
+                this.element.select2("enable", this.element.attr('disabled') != 'disabled' && ! this.options.disabled);
+                this.element.select2("readonly", (this.options.readonly));
+            }
+
+            // Setup handler for when the filtered_by field changes
+            this._on_filter_change();
+
+            // Default selection if selected value isn't preset
+            if (this.options._debug) console.log(this.element.attr('name') + 'this.element.val(): ' + this.element.val());
+            if ( ! this.element.val() || this.element.val() == 0) {
+                this._default_selection();
+            }
+
+        },
+
+        // --------------------------------------------------------------------
+
+        /**
+         * Get Select Options
+         *
+         * Prepares this.options.values array into an array of option objects for
+         * use by Select2.
+         *
+         * Also populates this.values_array with an array of just the values which
+         * is handy for some caluclations.
+         *
+         */
+        _get_select_options: function() {
+
+            // Fix for intermittent bug where if you load a form multiple times
+            // then sometimes filter_by select fields are not populated
+            if ($.type(this.options.values) == 'string') {
+                this.options.values = this._get_cached_options();
+            }
+
+            var values;
+            if (this.options._filtered) {
+                values = this.options.values[this.options._filter_element.val()];
+            } else {
+                values = this.options.values;
+            }
+
+            if (values) {
+                // Allow an array of numbers to be supplied, where both the label and
+                // and the value of the option will be taken to be the number
+                if ($.isArray(values) && $.isNumeric(values[0])) {
+                    this.options._select_values = values.map(function(v){ return String(v);});
+                    return this.options._select_values.map(function(value){
+                        return {id: value, text: String(value)};
+                    });
+                } else {
+                    this.options._select_values = Object.keys(values);
+                    var options = this.options._select_values.map(function(value){
+                        return {id: value, text: String(values[value])};
+                    });
+
+
+                    if (this.options.sort_alphabetically) {
+                        options.sort(function(a, b){
+                            var x = a.text.toLowerCase();
+                            var y = b.text.toLowerCase();
+                            return x < y ? -1 : x > y ? 1 : 0;
+                        });
+                    }
+
+                    return options;
+                }
+            } else {
+                if (this.options._debug) console.log(this.element.attr('name') + '_get_select_options has returned nothing');
+                return [];
+            }
+        },
+
+        // --------------------------------------------------------------------
+
+        /**
+         * On Filter Change
+         *
+         * Sets up an event handler for when the filtered_by field changes. If
+         * this.clear_on_change is true then the field will be cleared. If not
+         * then select2.val() is called. So if the value exists in the new
+         * filtered results it will be selected, otherwise it will be cleared.
+         *
+         */
+        _on_filter_change: function() {
+            var that = this;
+            if (this.options._filtered) {
+                this.options._filter_element.on('change', function() {
+
+                    if (that.options._debug) console.log(that.element.attr('name') + ': filter element change event fired');
+
+                    // Populate _select_options with correct options
+                    that.options._select_options = that._get_select_options();
+
+                    // Clear value on change
+                    if (that.options.clear_on_change) {
+                        that._default_selection();
+                    } else {
+                        if ($.inArray(that.element.select2('val'), that.options._select_values) === -1) {
+                            that._default_selection();
+                        } else {
+                            that.element.select2('val', that.element.select2('val'));
+                        }
+                    }
+                });
+            }
+        },
+
+        // --------------------------------------------------------------------
+
+        /**
+         * Default Selection
+         *
+         *
+         *
+         */
+        _default_selection: function() {
+
+            if (this.options._debug) console.log(this.element.attr('name') + ': _default_selection() called');
+            if (this.options._debug) console.log(this.element.attr('name') + ': _select_values length: ' + this.options._select_values);
+
+            // Select option if there is only 1
+            if (this.options.select_single && this.options._select_values.length == 1) {
+                this.element.select2('val', this.options._select_values[0]);
+
+            // Select first option if 'select_first' is true
+            } else if (this.options.select_first) {
+                this.element.select2('val', this.options._select_values[0]);
+
+            // Otherwise null the selection
+            } else {
+                this.element.select2('data', null);
+            }
+        }
+
+    });
+})(jQuery);

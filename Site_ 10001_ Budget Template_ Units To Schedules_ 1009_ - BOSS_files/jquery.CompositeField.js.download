@@ -1,0 +1,191 @@
+/**
+ * jquery.CompositeField
+ *
+ * This is the class that VariableField and MultiField extend.
+ *
+ * @author Robert Corley
+ *
+ */
+;(function($) {
+    $.widget( "gigabyte.CompositeField", {
+
+        /**
+         * Default Options
+         *
+         */
+        options: {
+            field_templates: [],
+            values: [],
+            inputs: [],
+            show_animation: 'show',
+            hide_animation: 'slideUp',
+            _pending_remove: false,
+            _form: null
+        },
+
+        /**
+         * Constructor
+         *
+         */
+        _create: function() {
+            this.options._form = this.element.parents('form');
+        },
+
+        /**
+         * Add Fields
+         *
+         * Takes an array of field objects and creates the dom elements, adds
+         * them to this.element and also sets up validation and javascript
+         * required for the fields.
+         *
+         */
+        add_fields: function( fields ) {
+            var that = this;
+            if (this.options._pending_remove) {
+                this.element.on('gigabyte.removed', function() {
+                    that._add_nodes(fields);
+                });
+            } else {
+                that._add_nodes(fields);
+            }
+        },
+
+        /**
+         * Add Nodes
+         *
+         * Takes an array of field objects and creates the dom elements, adds
+         * them to this.element and also sets up validation and javascript
+         * required for the fields.
+         *
+         */
+        _add_nodes: function( fields ) {
+            this.element.hide();
+            for (i=0; i<fields.length; i++) {
+                var field = fields[i];
+                var node = this._create_node(field);
+                var input = $(node).find("[name='" + field.name  + "']");
+                this.options.inputs[i] = input;
+                this.element.append(node);
+
+                // Run javascript for field
+                if ($.type(field.setup) == 'function') {
+                    field.setup(input);
+                }
+
+                // Add validation rules
+                if (field.rules) {
+                    input.rules('add', field.rules);
+                }
+            }
+
+            // Run Display.check() to hide/show fields according to their conditions
+            if ($(document).data("Display")) {
+                $(document).Display('check');
+            }
+
+            this.element.slideDown();
+        },
+
+        /**
+         * Remove Field
+         *
+         * Remove a single field, given the name attribute of the field
+         *
+         */
+        remove_field: function( name ) {
+            var input = this.element.find("[name='" + name + "']");
+            this.save_value( name, input.val() );
+            var field = this._get_wrapper(input);
+            field[this.options.hide_animation](function() {
+                $(this).remove();
+            });
+        },
+
+        /**
+         * Get Wrapper
+         *
+         * Gets the <div> wrapper around a form field given the input
+         * jquery object.
+         *
+         */
+        _get_wrapper: function( input ) {
+            return input.closest('.form-group');
+        },
+
+        /**
+         * Remove Fields
+         *
+         * Saves the values and removes the fields from the main element.
+         *
+         */
+        remove_fields: function() {
+            var that = this;
+            this.element.off('gigabyte.removed');
+            this.options._pending_remove = true;
+            this.save_values();
+            this.element[this.options.hide_animation](function() {
+                that.element.empty();
+                that.element.trigger('gigabyte.removed');
+                that.options._pending_remove = false;
+            });
+            this.options.inputs = [];
+        },
+
+        // --------------------------------------------------------------------
+
+        /**
+         * Save Values
+         *
+         * Save the values for all the fields currently displayed so they can
+         * be put back in if the fields need to be created again.
+         *
+         */
+        save_values: function() {
+            var that = this;
+            $.each(this.options.inputs, function(i, input) {
+                that.save_value( input.attr('name'), input.val() );
+            });
+        },
+
+        // --------------------------------------------------------------------
+
+        /**
+         * Save Value
+         *
+         * Saves a single value for a field.
+         *
+         */
+        save_value: function( name, value ) {
+            this.options.values[name] = value;
+        },
+
+        // --------------------------------------------------------------------
+
+        /**
+         * Create Node
+         *
+         * Makes the variable substituions in the form template html, creates
+         * the element and returns a DOM node.
+         *
+         */
+        _create_node: function( field ) {
+            var html = field.html;
+            html = html.replace(/\{\{name\}\}/g, field.name);
+            if (field.id) {
+                html = html.replace(/\{\{id\}\}/g, field.id);
+            } else {
+                html = html.replace(/\{\{id\}\}/g, field.name);
+            }
+            html = html.replace(/\{\{label\}\}/g, field.label);
+            html = html.replace(/\{\{wrapper_id\}\}/g, field.wrapper_id);
+            var value = this.get_value(field.name, $(html));
+            if ($.type(value) == 'object') {
+                return value;
+            }
+            html = html.replace(/\{\{value\}\}/g, value);
+            return $(html)[0];
+        },
+
+
+    });
+})(jQuery);

@@ -1,0 +1,51 @@
+/**
+ * jquery.DayPicker
+ *
+ * Behaviour for a day of year picker.
+ *
+ * @author Robert Corley
+ *
+ */
+;(function($) {
+    $(document).on('focus', '.form-day-of-year', function() {
+
+        var self = this;
+
+        if ( ! $(self).hasClass('hasDatepicker')) {
+            var options = {
+                id: $(this).attr('id'),
+                name: $(this).attr('name'),
+                format: $(this).attr('data-display-format')
+            }
+
+            var datepicker = $(self).datepicker({
+                beforeShow: function(input, inst){
+                    inst.dpDiv.addClass('NoYearDatePicker');
+                },
+                onClose: function(dateText, inst){
+                    inst.dpDiv.removeClass('NoYearDatePicker');
+                },
+                dateFormat: options.format,
+                changeMonth: true,
+                defaultDate: null,
+                changeYear: false,
+                altField: '#' + options.id + '-alt',
+                altFormat: 'yy-mm-dd'
+            });
+
+            var altDate = $.datepicker.formatDate('yy-mm-dd', new Date(datepicker.datepicker('getDate')));
+
+            if ($('#' + options.id + '-alt').length === 0) {
+                $('#' + options.id + '-alt').remove();
+                $(self).before('<input type="hidden" name="' + options.name + '" id="' + options.id + '-alt" value="' + altDate + '">');
+                $(self).attr('name', 'ignore-' + options.name);
+            }
+
+            $(self).change(function(){
+                if (!$(this).val()) $('#' + options.id + '-alt').val('');
+            });
+
+            $(self).datepicker('show');
+        }
+    });
+})(jQuery);

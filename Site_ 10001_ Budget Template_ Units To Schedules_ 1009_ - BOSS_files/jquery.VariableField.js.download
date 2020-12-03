@@ -1,0 +1,120 @@
+/**
+ * jquery.VariableField
+ *
+ * A variable field allows different form fields to appear depending upon the
+ * the value of another field. So for example there may be a dropdown of sites
+ * and when a different site is selected, different text input fields with
+ * names and labels relevant to the different sites appear and disappear.
+ *
+ * @author Robert Corley
+ */
+;(function($) {
+    $.widget( "gigabyte.VariableField", $.gigabyte.CompositeField, {
+
+        /**
+         * Default Options
+         *
+         */
+        options: {
+            field_info: [],
+            filtered_by: null,
+            _unfiltered_values: [],
+            _trigger_field: null,
+            _prev_trigger_value: null
+        },
+
+        /**
+         * Constructor
+         *
+         */
+        _create: function() {
+
+            // Clear values because is it not filtered by the 'filtered_by'
+            // field, which is what CompositeField expects
+            this.options._unfiltered_values = this.options.values ? this.options.values : [];
+            this.options.values = [];
+
+            // Set some properties
+            this.options._trigger_field = $('[name="' + this.options.filtered_by + '"]', this.options._form);
+
+            // Setup handler
+            this._setup_handler();
+
+            // Populate
+            this.options._trigger_field.trigger('change');
+        },
+
+        // --------------------------------------------------------------------
+
+        /**
+         * Setup Handler
+         *
+         * Sets up the event handler to generate the correct fields when the
+         * trigger field changes.
+         *
+         */
+        _setup_handler: function() {
+            var that = this;
+            var options = this.options;
+            this.options._trigger_field.on("change", function(element) {
+                that.remove_fields();
+                var trigger_value = $(this).val();
+                if (options.field_info[trigger_value] != undefined) {
+                    var fields = options.field_info[trigger_value];
+                    for(i=0; i<fields.length; i++) {
+                        // Set values property for CompositeValue to populate the fields
+                        if (options._unfiltered_values[trigger_value]) {
+                            that.options.values = options._unfiltered_values[trigger_value];
+                        }
+
+                        // Add values from template
+                        var template = that.options.field_templates[0];
+                        $.extend(fields[i], {
+                            setup: template.setup,
+                            rules: template.rules,
+                            html: template.html,
+                            wrapper_id: 'field_' + fields[i].name,
+                        });
+                    }
+
+                    that.add_fields(fields);
+                }
+                that.options._prev_trigger_value = that.options._trigger_field.val();
+            });
+        },
+
+        // --------------------------------------------------------------------
+
+        /**
+         * Save Value
+         *
+         * Saves a single value for a field.
+         *
+         */
+        save_value: function( name, value ) {
+            var filter_value = this.options._prev_trigger_value;
+            if (this.options._unfiltered_values[filter_value] == undefined) {
+                this.options._unfiltered_values[filter_value] = {};
+            }
+            this.options._unfiltered_values[filter_value][name] = value;
+        },
+
+        // --------------------------------------------------------------------
+
+        /**
+         * Get Value
+         *
+         * Gets the value for a field.
+         *
+         */
+        get_value: function( name ) {
+            var filter_value = this.options._trigger_field.val();
+            if (this.options._unfiltered_values[filter_value] != undefined) {
+                return this.options._unfiltered_values[filter_value][name];
+            } else {
+                return '';
+            }
+
+        }
+    });
+})(jQuery);

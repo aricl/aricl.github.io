@@ -1,0 +1,382 @@
+/**
+ * jquery.Display
+ * 
+ * Display form elements based on the values or form field values.
+ *
+ * @author Robert Corley
+ * 
+ */
+;(function($) {
+    $.widget( "gigabyte.Display", {
+    
+        /**
+         * Options
+         * 
+         */
+        options: {
+            conditions: null,
+            selector: null,
+            selector_array: [],
+            conditions_array: [],
+            _form: null,
+
+        },
+    
+        /**
+         * Constructor
+         * 
+         */
+        _init: function() {
+            var that = this;
+            
+            if ($.type(this.options.conditions) != 'array') {
+                this.options.conditions = [this.options.conditions];
+            }
+            
+            if (this.options.selector) {
+                this.options.selector_array.push(this.options.selector);
+                this.options.conditions_array.push(this.options.conditions);
+            }
+            
+            //this.options._form = this.element.closest('form');
+            
+            
+            var index = this.options.selector_array.length - 1;
+            this._setup_handlers(index);
+            this._check(index);
+        },
+
+        // --------------------------------------------------------------------
+
+        /**
+         * Setup Handlers
+         * 
+         */
+        _setup_handlers: function( index ) {
+            var that = this;
+            var fields = this._get_trigger_fields(index);
+            for (i=0; i<fields.length; i++) {
+                fields[i].on(this._get_event(fields[i]), function() {
+                    that._check(index);
+                });
+            }
+        },
+
+        // --------------------------------------------------------------------
+
+        /**
+         * Get Trigger Fields
+         * 
+         * Returns jquery object containing all the trigger fields.
+         * 
+         */
+        _get_trigger_fields: function( index ) {
+            var fields = [];
+            var conditions = this.options.conditions_array[index];
+            var k=0;
+            for(var i=0; i<conditions.length; i++) {
+                var field_names = Object.keys(conditions[i]);
+                for (var j=0; j<conditions[i].length; j++) {
+                    fields[k] = $("[name='" + conditions[i][j].field + "']");
+                    k++;
+                }
+            }
+            return fields;
+        },
+    
+        // ------------------------------------------------------------------------
+    
+        /**
+         * Get Event
+         * 
+         * Gets the appropriate event for triggering re-checking of display 
+         * conditions.
+         * 
+         */
+        _get_event : function( field ) {
+            if ( ! field[0]) {
+                return 'change';
+            }
+            var element = field[0].nodeName;
+            var type = field.attr('type');
+
+            if (element == 'INPUT' && 
+                (   type == 'radio'
+                 || type == 'hidden'
+                 || type == 'checkbox')) {
+                return 'change';
+            }
+            
+            // Select field
+            if (element == 'SELECT') {
+                return 'change';
+            }
+            
+            // Text field
+            if (element == 'INPUT' && type == 'text') {
+                return 'keyup';
+            }
+            
+            // Textarea field
+            if (element == 'TEXTAREA') {
+                return 'keyup';
+            }
+        },
+
+        // --------------------------------------------------------------------
+
+        /**
+         * Check
+         * 
+         * Checks all the form items with Display conditions.
+         * 
+         */
+        check: function(index) {
+            var display;
+            for (i=0; i<this.options.conditions_array.length; i++) {
+                display = this._check(i);
+            }
+
+            return display;
+        },
+
+        // --------------------------------------------------------------------
+
+        /**
+         * Check
+         * 
+         * Checks the conditions for a single form item
+         * 
+         */
+        _check: function( index ) {
+            
+            var and_blocks = this.options.conditions_array[index];
+            
+            var display = true;
+            for(var i=0; i<and_blocks.length; i++) {
+                if (this._check_or(and_blocks[i]) == false) {
+                    display = false;
+                    //break;
+                }
+            }
+            
+            if (display) {
+                this._show(index);
+            } else {
+                this._hide(index);
+            }
+            
+            return display;
+        },
+
+        // --------------------------------------------------------------------
+
+        /**
+         * Check Or
+         * 
+         * Checks the conditions and if any of them are true, returns true.
+         * 
+         */
+        _check_or: function( conditions ) {
+            for(var i=0; i<conditions.length; i++) {
+                var field = $("[name='" + conditions[i].field + "']");
+                if (field) {
+                    if (this._check_field(field, conditions[i].condition, conditions[i].operator)) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        },
+
+        // --------------------------------------------------------------------
+
+        /**
+         * Check Field
+         * 
+         * Checks an individual field against a condition. The condition can
+         * be an array of values and the values can either be strings or
+         * regular expressions.
+         * 
+         */
+        _check_field: function( field, condition, operator ) {
+            if($.type(condition) != 'array') {
+                condition = [condition];
+            }
+            var value = this._get_value(field);
+            var operator = this._operator(operator);
+            for (var i=0; i<condition.length; i++) {
+                if (this._check_value(value, condition[i], operator) == (operator == 'neq' ? false : true)) {
+                    return (operator == 'eq' ? true : (operator == 'neq' ? false : true));
+                }
+            }
+            return (operator == 'eq' ? false : (operator == 'neq' ? true : false));
+            //return false;
+        },
+
+        // --------------------------------------------------------------------
+
+        /**
+         * Check Values
+         * 
+         * Checks an individual field value against an individual condition
+         * value, which can be a string or a regular expression.
+         * 
+         */
+        _check_value: function( value, condition, operator ) {
+            reg_parts = String(condition).match(new RegExp("^/([^/]+)/([gimy]*)$"));
+            if (reg_parts) {
+                var match = value.match(new RegExp(reg_parts[1], reg_parts[2]));
+                if (operator == 'eq') {
+                    return match;
+                } else {
+                    return ! match;
+                }
+            } else {
+                switch (operator) {
+                    case 'eq':
+                        return value == condition;
+                        break;
+                    case 'neq':
+                        return value != condition;
+                        break;
+                    case 'lt':
+                        return value < condition;
+                        break;
+                    case 'gt':
+                        return value > condition;
+                        break;
+                    case 'lte':
+                        return value <= condition;
+                        break;
+                    case 'gte':
+                        return value >= condition;
+                        break;
+                }
+            }
+        },
+
+        // --------------------------------------------------------------------
+
+        /**
+         * Operator
+         * 
+         * Takes operator in various forms and returns one of the following:-
+         * 'eq', 'neq', 'lt', 'gt', 'gte', 'lte'
+         * 
+         */
+        _operator: function( operator ) {
+            switch (operator) {
+                case 'eq':
+                case '=':
+                case '==':
+                case '==':
+                case 'equals':
+                case 'equal':
+                case 'match':
+                case 'matched':
+                    return 'eq';
+                    break;
+                case 'neq':
+                case '!=':
+                case '!==':
+                case '<>':
+                case 'not_equal':
+                case 'not_equals':
+                case 'no_match':
+                case 'not_matched':
+                    return 'neq';
+                    break;
+                case 'lt':
+                case '<':
+                case 'less_than':
+                    return 'lt';
+                    break;
+                case 'gt':
+                case '>':
+                case 'greater_than':
+                    return 'gt';
+                    break;
+                case 'lte':
+                case '<=':
+                    return 'lte';
+                    break;
+                case 'gte':
+                case '>=':
+                    return 'gte';
+                    break;
+            }
+        },
+
+        // --------------------------------------------------------------------
+
+        /**
+         * Get Value
+         * 
+         * Gets the value of a field, accounting for select, radio and
+         * checkboxes.
+         * 
+         */
+        _get_value: function( field ) {
+            var element = field[0].nodeName;
+            var type = field.attr('type');
+            if ('SELECT' == element) {
+                return $('option:selected', field).val();
+            } else if ('INPUT' == element && ('checkbox' == type || 'radio' == type)) {
+                return field.filter(':checked').val();
+            } else {
+                return field.val();
+            }
+        },
+
+        // ------------------------------------------------------------------------
+    
+        /**
+         * Hide
+         * 
+         * Hides a field and it's label
+         * 
+         */
+        _hide : function(index) {
+            var element = $(this.options.selector_array[index]);
+            element
+                .find('input:not(.select2-search .select2-input),textarea,select,button')
+                .addClass('ignore')
+                .attr('disabled', true);
+            element.hide();
+        },
+    
+        // ------------------------------------------------------------------------
+    
+        /**
+         * Show
+         * 
+         * Shows a field and it's label - used by display_if.
+         * 
+         */
+        _show : function(index) {
+            var element = $(this.options.selector_array[index]);
+            this._show_effect(element);
+            element.find("input[id$=alt]").removeClass('ignore').attr('disabled', false);
+            element.find('input:visible,textarea:visible,select,input[type=hidden],button').removeClass('ignore').attr('disabled', false);
+        },
+    
+        // ------------------------------------------------------------------------
+    
+        /**
+         * Show Effect
+         * 
+         * Shows a field with an animation effect
+         * 
+         */
+        _show_effect : function(element) {
+            element
+                .css('opacity', 0)
+                .slideDown('slow')
+                .animate(
+                    {opacity: 1},
+                    {queue: false, duration: 'slow'}
+                );
+        },
+    });
+})(jQuery);

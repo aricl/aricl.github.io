@@ -1,0 +1,221 @@
+/**
+ * jquery.Util
+ * 
+ * Defines client-side utility functions. For example show_message displays the
+ * user messages.
+ *
+ * @author Robert Corley
+ * 
+ */
+
+;(function( $ ){
+  var methods = {
+
+    /**
+     * Constructor
+     * 
+     */ 
+    init : function( options ) {
+        return $(this);
+    },
+
+    // ------------------------------------------------------------------------
+
+    /**
+     * Show Message Method
+     * 
+     * Update the ContentBox
+     * 
+     */
+    show_message : function( msg ) {
+        $("#page-info .msg").remove();
+        $("#page-info").append('<div class="msg">' + msg + '</div>');
+        return $(this);
+    },
+
+    // ------------------------------------------------------------------------
+
+    /**
+     * Round
+     * 
+     */
+    round : function( number , precision ) {
+        precision = precision === undefined ? 3 : precision;
+        var num = Math.pow(10,precision);
+        var number = String(number).replace(/[^\d^.]/,'');
+        return Math.round(num*Number(number))/num;
+    },
+
+    // ------------------------------------------------------------------------
+
+    /**
+     * Update HTML
+     * 
+     * Gets HTML for whole content box and replaces it in the DOM
+     * 
+     */
+    update_html : function( options ) {
+        self = $(this);
+
+        $.get(base_url + options.ajax_update_url + '/' + options.record_id, function(data) {
+            content = $(data).find('.content-box-inner');
+            self.find('.content-box-inner').replaceWith(content);
+            
+        });
+    },
+
+    // ------------------------------------------------------------------------
+
+    /**
+     * Redraw Table
+     * 
+     * Refreshes all dataTables on the page
+     * 
+     */
+    redraw_table : function() {
+        window[$(this).attr('id')].fnDraw();
+    },
+
+    // ------------------------------------------------------------------------
+
+    /**
+     * Dialog Message
+     * 
+     * Displays a modal dialog message to the user.
+     * 
+     */
+    dialog_message : function( title, msg ) {
+        setTimeout(function(){
+            
+            $('.dialog-message').remove();
+            $('<div class="dialog-message" title="' + title + '"><p>' + msg + '</p></div>')
+            .appendTo('body');
+            $( ".dialog-message" ).dialog({
+                modal: true,
+                buttons: {
+                    Ok: function() {
+                        $( this ).dialog( "close" );
+                    }
+                }
+            });
+            
+        },300);
+    },
+
+    // ------------------------------------------------------------------------
+
+    /**
+     * Spinner
+     * 
+     * Displays a spinner for loading. Using JS instead of an animated gif.
+     * 
+     */
+    spinner : function( target ) {
+        var opts = {
+          lines: 13, // The number of lines to draw
+          length: 13, // The length of each line
+          width: 2, // The line thickness
+          radius: 11, // The radius of the inner circle
+          corners: 1, // Corner roundness (0..1)
+          rotate: 11, // The rotation offset
+          direction: 1, // 1: clockwise, -1: counterclockwise
+          color: '#000', // #rgb or #rrggbb or array of colors
+          speed: 0.8, // Rounds per second
+          trail: 62, // Afterglow percentage
+          shadow: false, // Whether to render a shadow
+          hwaccel: false, // Whether to use hardware acceleration
+          className: 'spinner', // The CSS class to assign to the spinner
+          zIndex: 2e9, // The z-index (defaults to 2000000000)
+          top: '50%', // Top position relative to parent
+          left: '50%' // Left position relative to parent
+        };
+        var spinner = new Spinner(opts).spin(target);
+    },
+
+    // ------------------------------------------------------------------------
+
+    /**
+     * Months Between
+     * 
+     * Returns the absolute number of full calendar months between 2 dates.
+     * 
+     */
+    months_between : function( from, to ) {
+        var months = to.getMonth() - from.getMonth() 
+            + (12 * (to.getFullYear() - from.getFullYear()));
+        
+        if(to.getDate() < from.getDate()){
+            months--;
+        }
+        return months;
+    },
+
+    // --------------------------------------------------------------------
+
+    /**
+     * Setup confirm dialog
+     * 
+     * This is setup using jquery ui dialog.
+     */
+    confirm : function( options ) {
+        
+        // Set default options
+        var default_options = {
+            title: "Please Confirm",
+            message: "Are you sure you want to do that?",
+            continue_button: "Yes",
+            cancel_button: "No",
+            continue_handler: function() {return true;},
+            cancel_handler: function() {return false;}
+        };
+        options = $.extend({},default_options,options);
+
+        // Append html for jquery ui dialog to body
+        var html = '<div id="dialog-confirm" title="' + 
+                          options.title +
+                          '"><p>' +
+                          options.message +
+                          '</p></div>';
+        var $dialog = $(html).appendTo('body');
+        
+
+        // Create buttons object
+        var buttons = {};
+        buttons[options.continue_button] = function () {
+            $dialog.dialog("close");
+            return options.continue_handler(options);
+        };
+        buttons[options.cancel_button] = function () {
+            $dialog.dialog("close");
+            return options.cancel_handler(options);
+        };
+
+        // Create jquery ui dialog
+        $dialog.dialog({
+            resizable: false,
+            autoOpen: false,
+            modal: true,
+            dialogClass: 'confirm',
+            buttons: buttons
+        });
+
+        $dialog.dialog('open');
+
+    }
+  };
+
+  // ----------------------------------------------------------------------
+
+  /**
+   * Setup method handler
+   */
+  $.fn.Util = function( method ) {
+        if ( methods[method] ) {
+          return methods[ method ].apply( this, Array.prototype.slice.call( arguments, 1 ));
+        } else if ( typeof method === 'object' || ! method ) {
+          return methods.init.apply( this, arguments );
+        } else {
+          $.error( 'Method ' +  method + ' does not exist on jQuery.Util' );
+        }    
+    };
+})( jQuery );

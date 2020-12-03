@@ -1,0 +1,270 @@
+/**
+ * jquery.Loader
+ *
+ *
+ *
+ * @author Robert Corley
+ *
+ */
+;(function($) {
+    $.widget( "gigabyte.Loader", {
+
+        /**
+         * Default Options
+         *
+         */
+        options: {
+            load_initially: true,
+            first_load_animation: 'slideDown',
+            in_animation: 'slideDown',
+            out_animation: 'hide',
+            url: null,
+            query_string: '',
+            window_resize_onload: true,
+            after_first_load: null,
+            before_first_load: null,
+            before_load: null,
+            after_load: null,
+            js_loaded: false,
+            html_loaded: false,
+            js_function_name: null,
+            js_url: null,
+            loaded: false
+        },
+
+        /**
+         * Constructor
+         *
+         */
+        _create: function() {
+            if (this.options.load_initially) {
+                this.first_load = true;
+                this.load();
+            }
+        },
+
+        /**
+         * Load
+         *
+         * Loads the content from a URL into the container.
+         *
+         */
+        load: function( url ) {
+
+            // Setup some variables
+            var that = this;
+            var container = this.element;
+            var url = url || this.options.url;
+            this.options.url = url;
+            this.options.loaded = false;
+
+            // Check we have a URL to load content from
+            if (url && ! $(container).data('load_in_progress')) {
+
+                $(container).data('load_in_progress', true);
+
+                // Trigger event
+                $(document).trigger('gigabyte.loaderloading', url);
+
+                // Call callbacks
+                if (this.first_load) {
+                    this.call(that.options.before_first_load);
+                } else {
+                    this.call(that.options.before_load);
+                }
+
+                // Get query string for cache options
+                var cached = '';
+                if ($(document).data('gigabyte-OptionCache') && $(document).OptionCache("query_string")) {
+                    cached = $( document ).OptionCache( "query_string" ) + (this.options.query_string ? '&' + this.options.query_string : '')
+                } else {
+                    cached = '?' + this.options.query_string;
+                }
+
+                // Make javascript request
+                var random_string = that.random_string();
+                this.options.js_url = url + '/--js--/' + random_string  + cached;
+                this.options.js_function_name = 'func_' + random_string;
+                this.on_content_loaded();
+                $(document).on(that.options.js_function_name + '_loaded', function () {
+                    that.options.js_loaded = true;
+                    $(document).trigger('gigabyte.loader.js.loaded');
+                });
+                head.js(that.options.js_url, function() {
+
+                });
+
+                // Make html request
+                $.ajax({
+                    url : url + '/--html--' + cached,
+                    async: true,
+                    success: function( html, textStatus ){
+                        // Add content to the element
+                        if (that.first_load) {
+                            container.hide().append(html);
+                            that.options.html_loaded = true;
+                            $(document).trigger('gigabyte.loader.html.loaded');
+                        } else {
+                            container.slideUp(200, function(){
+                                $(this).find('.select2-offscreen').select2('destroy');
+                                $(this).empty().append(html);
+                                that.options.html_loaded = true;
+                                $(document).trigger('gigabyte.loader.html.loaded');
+
+                            });
+                            //container[that.options.out_animation].;
+                        }
+
+                        // Remove --html-- suffix from any forms returned
+                        container.find('form').each(function(){
+                            $(this).attr('action', $(this).attr('action').replace(/\/--html--/,''));
+                        });
+
+                        // Avoid scrollbar when opening select2
+                        $('body').css('overflow','hidden');
+
+                        $(container).data('load_in_progress', false);
+
+                        return;
+                    }
+                });
+
+
+            }
+
+        },
+
+        /**
+         * On Content Loaded
+         *
+         * Show the container and call any callbacks
+         *
+         */
+        on_content_loaded: function() {
+            var that = this;
+
+            $(document).on('gigabyte.loader.html.loaded', function () {
+                if (that.options.js_loaded) {
+                    $(document).trigger('gigabyte.loader.content.loaded');
+                }
+            });
+
+            $(document).on('gigabyte.loader.js.loaded', function () {
+                if (that.options.html_loaded) {
+                    $(document).trigger('gigabyte.loader.content.loaded');
+                }
+            });
+
+            $(document).one('gigabyte.loader.content.loaded', function () {
+                that.options.js_loaded = false;
+                that.options.html_loaded = false;
+
+                // Remove <script> tag for any content that was in the container
+                // previously
+                if (that.element.data('Loader.js_url') && that.element.data('Loader.js_url') != that.options.js_url) {
+                    var script_tag = $("script[src='" + that.element.data('Loader.js_url') + "']");
+                    if (script_tag) {
+                        script_tag.remove();
+                    }
+                }
+
+                run();
+            });
+
+
+            function run() {
+                if ( ! $.isFunction(window[that.options.js_function_name]) || ! that.element.children().length) {
+                    setTimeout(function() { run(); }, 200);
+                } else {
+                    window[that.options.js_function_name](function() {
+                        if (that.options.window_resize_onload) {
+                            $(window).trigger('resize');
+                        }
+                        // Call callbacks
+                        if (that.first_load) {
+                            that.call(that.options.after_first_load);
+                        } else {
+                            that.call(that.options.after_load);
+                        }
+                        that.call(that.options.after);
+
+                        // No longer first load
+                        that.first_load = false;
+
+                        // Trigger loaded event
+                        $(document).trigger('gigabyte.loaderloaded', that.options.url);
+
+                        // Add the javascript url so that that the <script> tag can be
+                        // removed if different content is loaded into the container
+                        that.element.data('Loader.js_url', that.options.js_url);
+                    });
+
+                    that.element[that.options.in_animation](130, function () {
+                        // Let the loaded content know that it's been loaded inline
+                        // rather than on a modal dialog. This is used to do different
+                        // things on form submission
+                        that.element.children().data('Loader.inline', true);
+                    });
+                }
+            }
+        },
+
+        /**
+         * Call
+         *
+         * Calls all the callbacks defined in callbacks. The callbacks should
+         * either be in the form
+         * {   call: [jquery PLugin name],
+         *     method: [metho name],
+         *     with_options: {options object}}
+         *
+         * Or a javascript function should be passed
+         *
+         * Can supply an array with multiple callbacks.
+         *
+         */
+        call: function( callbacks ) {
+
+            if (callbacks) {
+                var that = this;
+
+                // Allow either single callback or array of callbacks
+                if (callbacks.call !== undefined) {
+                    callbacks = [callbacks];
+                }
+
+                if (callbacks.length > 0) {
+                    $.each(callbacks, function(i, params) {
+                        if (params !== null) {
+                            // Allow functions to be passed
+                            if ($.isFunction(params)) {
+                                params.call(that, that.element);
+                            } else {
+                                // Check with_options is not undefined
+                                if (params.with_options === undefined) {
+                                    params.with_options = {};
+                                }
+
+                                // Call the method specified
+                                $.fn[params.call].call(that, params.method, params.with_options);
+                            }
+                        }
+                    });
+                }
+            }
+        },
+
+        /**
+         * Random String
+         *
+         * Generates a random string.
+         *
+         */
+        random_string: function() {
+            return 'xxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                var r = Math.random()*16|0, v = c == 'x' ? r : (r&0x3|0x8);
+                return v.toString(16);
+            });
+        }
+    });
+})(jQuery);

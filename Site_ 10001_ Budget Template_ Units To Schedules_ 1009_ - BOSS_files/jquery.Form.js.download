@@ -1,0 +1,1029 @@
+/*jshint unused:false,jquery:true,eqeqeq:false*//*global qq:true,base_url:true,head:true*/
+/**
+ * jquery.Form
+ *
+ * Defines client-side behaviour for Form and FormField objects
+ *
+ * @author Robert Corley
+ *
+ */
+
+;(function ($){
+  "use strict";
+  var methods = {
+
+    /**
+     * Constructor
+     *
+     */
+    init : function() {
+        return $(this);
+    },
+
+    // --------------------------------------------------------------------
+
+    /**
+     * Setup form
+     *
+     * Sets up form tooltips, form validation and any comboboxes.
+     *
+     */
+    setup : function( options ) {
+
+		var self = this;
+
+		// Hide submit button before form validation
+		var submit = $('input[type="submit"]', self);
+		submit.off('click');
+		submit.on('click', function(){
+			$(this).Form('toggle');
+		});
+
+		$('#file-uploader').on('start', function () {
+		    console.log('blah');
+        });
+
+        // Create validation options, these are passed to the jquery validation plugin.
+        if (options) {
+            var validation = {
+                rules: options.validation.rules,
+                messages: options.validation.messages,
+                onkeyup: function(element) { $(element).valid(); },
+                errorElement: "div",
+
+                // the errorPlacement puts the error message next to the tooltip
+                errorPlacement: function(error, element) {
+                    error.prependTo( element.domNext('.field-info') );
+                },
+
+                // prepare form data for submission
+                submitHandler: function(form) {
+                    if ( ! options.is_ajax) {
+                        form.submit();
+                    } else {
+                        $(form).Form('ajax_submit', options);
+                    }
+                },
+                ignore: ".ignore",
+                // set this class to error-labels to indicate valid fields
+                success: function(label) {
+                    // set &nbsp; as text for IE
+                    label.html("&nbsp;").addClass("checked");
+                },
+                invalidHandler: function(event, validator) {
+                    // Show submit button again
+                    $(self).Form('toggle');
+                    $(self).Form('toggle');
+
+                    // Remove 'previousValue' data from remote_custom validated fields to force revalidation
+                    $(event.target).find('input').each(function(){
+                        var rule = $(this).rules();
+                        if (rule.remote_custom) {
+                            $(this).removeData("previousValue");
+
+                            $(this).on('blur',function(){
+                                $(this).removeData("previousValue");
+                            });
+                        }
+                    });
+                }
+            };
+            // If this is an ajax form then save the validation options on the form wrapper div
+            // so that the validation can be reapplied everytime the form is loaded into the
+            // into the DOM.
+            if(options.is_ajax) {
+                $('#' + options.id + '_wrapper').data('validation', validation);
+            }
+
+            // Setup validation
+            var validate = $(this).validate(validation);
+
+            // Remove class rule for 'date'
+            $.validator.addClassRules('date', {date: false});
+
+        }
+
+        // Focus on first form field
+        $(this).find("input:not([type='hidden'],.form-date):first").focus();
+
+        // Finally setup validation
+        $(this).validate($('#' + $(this).attr('id') + '_wrapper').data('validation'));
+
+        $.fn.Form('setup_tooltip');
+
+        $.fn.Form('setup_extended_tooltip');
+
+    },
+
+    // --------------------------------------------------------------------
+
+    /**
+     * Setup Multiselect field
+     *
+     * If a multidimentional array is supplied for the values to a
+     * multiselect field then the values in the select field will be dynamic
+     * and will depend upon the value of another field in the form (the
+     * name attribute of which is supplied in settings.filtered_by). This
+     * method sets up the change handler for that field and updates the
+     * <options> in the multiselect accordingly.
+     *
+     */
+    setup_multiselect_field : function( settings ) {
+
+         $(this).multiselect();
+         // If we have dynamic <options> then setup the handler etc...
+         if (settings.filtered_by) {
+
+            var select = $(this);
+            var form = $(this).parentsUntil('form').parent();
+            var filter_field = $('input[name="'+settings.filtered_by+'"]', form);
+
+            // Setup handler
+            select.data('triggered_once', false);
+            var selector = '#'+form.attr('id') + ' input[name="'+settings.filtered_by+'"]';
+            $(document).on('change', selector, function(event, first_trigger){
+            	// Don't trigger if this is a first trigger
+            	if ( ! (first_trigger && select.data('triggered_once'))) {
+
+	                if (select.multiselect()) {
+	                    select.multiselect('destroy');
+	                }
+	                var values = settings.values[filter_field.val()];
+	                if (settings.clear_on_change == 0 || ! select.data('triggered_once')) {
+	                    var selected = settings.selected_values;
+	                }
+	                select.data('triggered_once', true);
+	                var options = $.fn.Form('_generate_options', values, selected, settings.select_first);
+	                select.empty().append(options);
+	                select.multiselect();
+            	}
+
+            });
+
+            // Populate initially
+            $(selector).trigger('change', [true, select]);
+        }
+    },
+
+    // --------------------------------------------------------------------
+
+    /**
+     * _generate_options
+     *
+     * Take an array like object of values and selected values(s) and
+     * returns an array of <option> DOM elements with the select attributes
+     * correctly populated.
+     *
+     */
+    _generate_options : function(values, selected, select_first, select_single) {
+
+        var selected = selected;
+
+        // Make 'selected' an array if String or Number supplied
+        if (typeof selected == 'string' || typeof selected == 'number') {
+            selected = [String(selected)];
+        // Multiple selected values must have been passed, so convert to array
+        } else if (typeof selected == 'object' && selected !== null) {
+            selected = $.map($.makeArray(selected), function(val){
+                return String(val);
+            });
+        // Otherwise use empty array
+        } else {
+            selected = [];
+        }
+
+        // Select first option if only a single value
+        if (select_single && values && $.map(values, function(n, i) { return i; }).length == 1) {
+        	$.each(values, function(value, label) {
+       			selected = [value];
+       		});
+        }
+
+        // Create the options
+        var option = document.createElement("option");
+        var default_option = $(option).text('')[0];
+        default_option.value = 0;
+        var options = select_first ? [default_option] : [];
+
+
+        if (typeof values == 'object' && values !== null) {
+            var i = options.length;
+            $.each(values, function(value, label){
+                var option = document.createElement("option");
+                option.value = value;
+                if ($.inArray(value, selected) !== -1) {
+                    $(option).attr('selected', true);
+                }
+                options[i] = $(option).text(label)[0];
+                i++;
+            });
+        }
+        return options;
+    },
+
+    // --------------------------------------------------------------------
+
+    /**
+     * Setup tooltip
+     *
+     * Show/hide tooltip on focus/blur of form inputs.
+     *
+     */
+    setup_tooltip : function() {
+
+        // Input fields and textarea fields
+        $("input:not(input.select),textarea").focus(function(){
+            $(this).Form('_show_tooltip');
+        });
+
+        $(document).on('select2-focus', 'input[type="hidden"].select2-offscreen', function(){
+            $(this).Form('_show_tooltip');
+        });
+
+        $(document).on('select2-blur', 'input[type="hidden"].select2-offscreen', function(){
+            $(this).Form('_hide_tooltip');
+        });
+
+        $(document).on('select2-focus', '.select2-container', function(){
+            $(this).Form('_show_tooltip');
+        });
+
+
+        $(document).on('mouseenter', 'span.checkbox', function(){
+            $(this).Form('_show_tooltip');
+        });
+        $(document).on('mouseleave', 'span.checkbox', function(){
+            $(this).Form('_hide_tooltip');
+        });
+
+        //'input[type="hidden"].select2-offscreen'
+
+        $("input:not(input.select),textarea").blur(function(){
+            $(this).Form('_hide_tooltip');
+        });
+
+        // Multi Select Fields
+        $('select[multiple="multiple"]').on('multiselectopen', function(){
+            $(this).Form('_show_tooltip');
+        });
+
+        $('select[multiple="multiple"]').on('multiselectclose', function(){
+            $(this).Form('_hide_tooltip');
+        });
+
+    },
+
+    // ------------------------------------------------------------------------
+
+    /**
+     * Hide Tooltip
+     *
+     * Hides a tooltip for a field
+     *
+     */
+    _hide_tooltip : function() {
+        var element;
+        // Radio checkbox
+        if ( $(this).parent('span.checkbox').length !== 0 )
+        {
+        	element = $(this).parent().next().children('.tooltip');
+        // All other field types
+        } else if ( $(this).nextUntil('.field-info').length !== 0 ){
+            element = $(this).nextUntil('.field-info').next().children('.tooltip');
+        } else {
+            element = $(this).next().children('.tooltip');
+        }
+        element.fadeOut(400);
+    },
+
+    // ------------------------------------------------------------------------
+
+    /**
+     * Show Tooltip
+     *
+     * Shows a tooltip for a field
+     *
+     */
+    _show_tooltip : function() {
+        var field_info;
+        // Radio checkbox
+        if ( $(this).parent('span.checkbox').length !== 0 )
+        {
+        	field_info = $(this).parent().next();
+        // All other field types
+        } else if ( $(this).nextUntil('.field-info').length !== 0 ){
+            field_info = $(this).nextUntil('.field-info').next();
+        } else {
+            field_info = $(this).next();
+        }
+        field_info.show();
+
+        var element = field_info.children('div.tooltip');
+        element.fadeIn(400);
+    },
+
+    /**
+     * Setup Extended Tooltip
+     *
+     * Shows an extended tooltip for a field
+     *
+     */
+    setup_extended_tooltip: function() {
+        var selects = $('input.extended-tooltip');
+
+        var formatCode = function(code) {
+            code = code.toLowerCase();
+            return 'desc' + code.charAt(0).toUpperCase() + code.slice(1);
+        };
+
+        for(var i = 0; i < selects.length; i++) {
+            var select = selects[i];
+
+            $(select).parent().children('.extended-tooltip-detail').remove();
+            var extendedTooltip = $('<div class="extended-tooltip-detail"></div>');
+            $(select).after(extendedTooltip);
+            extendedTooltip.html($(select).data(formatCode($(select).val())));
+
+            //$(select).off('extendedtooltip.change');
+            $(select).on('change', function(e) {
+                var target = $(e.target);
+                var changedTo = formatCode($(e.target).val());
+
+                var detail = target.next('div.extended-tooltip-detail');
+                var desc = target.data(changedTo);
+
+                detail.html('');
+                detail.html(desc);
+            });
+        }
+    },
+
+    // --------------------------------------------------------------------
+
+    /**
+     * Ajax submit handler
+     *
+     * Perform ajax request with form data
+     *
+     */
+    ajax_submit : function(options) {
+
+        // $table is the table to inject row back into
+        var $form = $(this);
+        //var $form_wrapper = $form.closest('div.ui-dialog-content');
+        var formId = $(this).attr('id');
+        var content_box = $(this).closest('div.content-box-wrapper');
+
+        // Is this an inline ajax form, or modal?
+        var modal = ! $form.data('Loader.inline');
+
+        // Hide the submit button
+        this.Form('toggle');
+
+        // Serialize form data and post
+        var post_data = $form.serializeArray();
+
+        // Get query string for cache options
+        if ($(document).data('gigabyte-OptionCache')) {
+            var cached = $( document ).OptionCache( "query_string" );
+        } else {
+            var cached = '';
+        }
+
+        $.ajax({
+            url: $form.attr('action') + cached,
+            type: "POST",
+            data: post_data,
+            dataType: "json",
+            success: function(data) {
+
+                        // Hide loading icon
+                        /*setTimeout(function() {
+                            $('#' + formId ).Form('toggle');
+                        },200);*/
+
+                        // Show message
+                        setTimeout(function() {
+                            $.fn.Util('show_message',data.msg);
+                            $('#' + formId + "_wrapper").html('');
+                        },500);
+
+                        // Do modal form stuff
+                        if (modal) {
+                            // Close form dialog
+                            setTimeout(function() {
+                                content_box.dialog("close");
+                            },300);
+
+                            // Remove form html so that form is cleared
+                            setTimeout(function() {
+                                content_box.html('');
+                            },300);
+
+                            // Remove HTML from wrapper
+                            setTimeout(function() {
+                                $('#' + formId + "_wrapper").html('');
+                            },500);
+
+                        // Do inline form stuff
+                        } else {
+                            var container = $form.parents('.loader');
+                            setTimeout(function() {
+                                container.Loader("load", data.success_url);
+                                var url = data.success_url;
+                                url = url.substr(url.lastIndexOf('/') + 1);
+                                window.history.pushState(null, null, url);
+                            },300);
+                        }
+
+                        // Trigger update on any ContentBoxes that this Form is bound to
+                        if ( options.bindings.length !== 0 ) {
+                            $.each( options.bindings, function( index, css_id ){
+                                if ($('#' + css_id).length) {
+                                    $( '#' + css_id ).ContentBox( 'update', data.record_id );
+                                }
+                            });
+                        }
+                    },
+            error: function(xhr, ajaxOptions, thrownError) {
+
+
+                        // Hide loading icon and show submit button
+                        setTimeout(function() {
+                            $('#' + formId).Form('toggle');
+                        },200);
+
+                        // Close form dialog
+                        /*setTimeout(function() {
+                            content_box.dialog("close");
+                        },300);*/
+
+                        switch (xhr.status) {
+
+                            // Form validation errors
+                            case 422:
+                                var data = $.parseJSON(xhr.responseText);
+
+                                // Show form validation errors
+                                setTimeout(function() {
+	                                $.each(data.errors,function (i,v){
+	                                    $('#' + formId + " [name=" + i + "] ~ .field-info:first").prepend("<div class=\"error\" style=\"display:inline-block\">" + v + "</div>");
+	                                });
+                                },500);
+                                break;
+
+                            // 403 either displays a normal message or a dialog
+                            // messgae with the problems
+                            case 403:
+                                var data = $.parseJSON(xhr.responseText);
+
+		                        // Close form dialog
+		                        setTimeout(function() {
+		                            content_box.dialog("close");
+		                        },300);
+
+                                // Show message
+                                setTimeout(function() {
+	                                if (data.msg !== undefined)
+	                                {
+	                                    $.fn.Util('show_message', data.msg);
+	                                }
+	                                else if (data.dialog_message !== undefined)
+	                                {
+	                                    $.fn.Util('dialog_message', data.dialog_message.title, data.dialog_message.message);
+	                                }
+                                },500);
+
+                                // Trigger update on any ContentBoxes that this Form is bound to
+                                if ( options.bindings.length !== 0 ) {
+                                    $.each( options.bindings, function( index, css_id ){
+                                        if ($('#' + css_id).length) {
+                                            $( '#' + css_id ).ContentBox( 'update', data.record_id );
+                                        }
+                                    });
+                                }
+                                break;
+
+                            // Other problem with request - this fires an error report
+                            default:
+
+                            	// Close form dialog
+		                        setTimeout(function() {
+		                            content_box.dialog("close");
+		                        },300);
+
+                            	// Show message
+                                setTimeout(function() {
+	                                $.fn.Util('show_message', 'There was a problem with this request. An error report has been logged and adminstrators informed.');
+                                },500);
+
+                                break;
+
+                        }
+                    }
+        });
+    },
+
+    // ------------------------------------------------------------------------
+
+    /**
+     * Toggle method
+     *
+     * Hide submit button and show loading icon
+     *
+     */
+    toggle : function() {
+        $('#' + this.attr('id') + " input[type=submit]").toggle();
+        $('#' + this.attr('id') + " img.loading").toggle();
+    },
+
+    // ------------------------------------------------------------------------
+
+    /**
+     * Setup Date Field Method
+     *
+     * Sets up jQuery UI date selector
+     *
+     */
+    setup_date_field : function(options) {
+        var self = this;
+
+        $(self).on('focus', function(){
+            if (options.readonly || options.disabled) {
+                $(self).addClass('is-grayed-out');
+                if (options.readonly) {
+                    $(self).attr('readonly', true);
+                    $(self).addClass('readonly');
+                }
+                if (options.disabled) {
+                    $(self).attr('disabled', true);
+                    $(self).addClass('disabled');
+                    $(self).addClass('ignore');
+                }
+            } else {
+                console.log('#' + options.id + '-alt');
+                if ( ! $(self).hasClass('hasDatepicker')) {
+                    if (altDate === '1970-01-01') {
+                        altDate = '';
+                    }
+
+                    var datepicker = $(self).datepicker({
+                        beforeShow: function(input, inst){
+                            $(input).attr('readonly', options.readonly);
+                            $(input).attr('disabled', options.disabled);
+                            if (options.no_year) {
+                                inst.dpDiv.addClass('NoYearDatePicker');
+                            }
+                        },
+                        onClose: function(dateText, inst){
+                            if (options.no_year) {
+                                inst.dpDiv.removeClass('NoYearDatePicker');
+                            }
+                        },
+                        dateFormat: options.format,
+                        changeMonth: true,
+                        defaultDate: null,
+                        changeYear: options.change_year,
+                        yearRange: options.year_range,
+                        altField: '#' + options.id + '-alt',
+                        altFormat: 'yy-mm-dd'
+                    });
+
+                    var altDate = $.datepicker.formatDate('yy-mm-dd', new Date(datepicker.datepicker('getDate')));
+
+                    if ($('#' + options.id + '-alt').length === 0) {
+                        $('#' + options.id + '-alt').remove();
+                        $(self).before('<input type="hidden" name="' + options.name + '" id="' + options.id + '-alt" value="' + altDate + '">');
+                        $(self).attr('name', 'ignore-' + options.name);
+                    }
+
+                    $(self).change(function(){
+                        if (!$(this).val()) $('#' + options.id + '-alt').val('');
+                    });
+
+                    console.log(self);
+                    $(self).datepicker('show');
+                }
+            }
+        });
+
+        return $(this);
+    },
+
+    // ------------------------------------------------------------------------
+
+    /**
+     * FormGet Setup
+     *
+     * Adds a handler to the form submit event which serializes the form
+     * data and changes the query string to a friendly URL.
+     *
+     */
+    form_get_setup : function() {
+
+        var self = $(this);
+        $(self).off('submit');
+        $(document).on('submit','#'+ self.attr('id'),function(event){
+
+            event.preventDefault();
+            event.stopPropagation();
+
+            var url = self.attr('action');
+            if (url[url.length - 1] === '/' ) {
+                url.length = url.length - 1;
+            }
+
+            var form_data = self.serializeArray();
+            $.each(form_data,function(i,v) {
+               if (v.name.match(/^ignore-/) === null && v.value !== '') {
+                   url = url + '/' + encodeURIComponent(v.name) + '/' + encodeURIComponent(v.value);
+               }
+            });
+
+            window.location = url;
+        });
+    },
+
+    // ------------------------------------------------------------------------
+
+    /**
+     * FormGet Semantic Setup
+     *
+     * Adds a handler to the form submit event which serializes the form
+     * data and changes the query string to a friendly URL.
+     *
+     */
+    form_get_semantic_setup : function() {
+
+        var self = $(this);
+        $(self).off('submit');
+        $(document).on('submit','#'+ self.attr('id'),function(event){
+
+            event.preventDefault();
+            event.stopPropagation();
+
+            var url = self.attr('action');
+            if (url[url.length - 1] === '/' ) {
+                url.length = url.length - 1;
+            }
+
+            var form_data = self.serializeArray();
+            $.each(form_data,function(i,v) {
+
+               if (v.name.match(/^ignore-/) === null && v.value !== '') {
+                   url = url + '/' + encodeURIComponent(v.name) + '/' + encodeURIComponent(v.value);
+               }
+
+            });
+
+            window.location = url;
+        });
+    },
+
+    // ------------------------------------------------------------------------
+
+    /**
+     * Display IF
+     *
+     * Used to display/hide certain form elements depending on the values
+     * of other form elements.
+     *
+     */
+    display_if : function( options ) {
+
+        var self = $(this);
+
+        if (options) {
+            self.data('display_if', options);
+        }
+
+        if (self.data('display_if')) {
+            var options = self.data('display_if');
+            var condition_field = $('#' + options.field_name);
+            if (condition_field[0] === undefined) {
+                condition_field = $('[name="' + options.field_name + '"]');
+            }
+            if (condition_field[0] === undefined) {
+                $.error('Cannot find condition field with an id or name attribute of "' + options.field_name + '" to apply display_if conditions on.');
+            }
+
+            // Hide initially if condition is not met
+            if ( ! condition_field.Form('_check_conditions', options.values)) {
+                self.Form('_hide');
+            }
+
+            // Bind event handler to field
+            condition_field.on( condition_field.Form('_event'), function(event) {
+                if ($(this).Form('_check_conditions', options.values)) {
+                    self.Form('_show');
+
+                    // Redraw dialog
+                    //var content_box_wrapper = self.closest('.content-box-wrapper').dialog('open');
+                } else {
+                    self.Form('_hide');
+                }
+            });
+
+
+        }
+    },
+
+    // ------------------------------------------------------------------------
+
+    /**
+     * Event
+     *
+     * Gets the appropriate event for the display_if handler. i.e. keyup for a
+     * text field and change for a radio input field.
+     *
+     */
+    _event : function() {
+        var self = $(this);
+
+        // Radio input
+        if (self[0].tagName === 'INPUT' && self.attr('type') == 'radio') {
+            return 'change';
+        }
+
+        // Select field
+        if (self[0].tagName === 'INPUT' && self.attr('type') == 'hidden') {
+            return 'change';
+        }
+
+        // Select field
+        if (self[0].tagName === 'SELECT') {
+            return 'selectchanged';
+        }
+
+        // Text field
+        if (self[0].tagName === 'INPUT' && self.attr('type') == 'text') {
+            return 'keyup';
+        }
+
+        // Textarea field
+        if (self[0].tagName === 'TEXTAREA') {
+            return 'keyup';
+        }
+    },
+
+    // ------------------------------------------------------------------------
+
+    /**
+     * Check Conditions
+     *
+     * Checks if the value of the field matches the conditions
+     *
+     */
+    _check_conditions : function( conditions ) {
+
+        if ($.inArray('AND', conditions)) {
+            for(var i=0; i<conditions.length; i++) {
+                if(conditions[i] != 'AND') {
+
+                }
+            }
+        }
+
+
+        // Radio input
+        if ($(this)[0].tagName === 'INPUT' && $(this).attr('type') == 'radio') {
+            var value = Number($('[name="' + $(this).attr('name') + '"]:checked').val());
+            if ($.inArray(Number(value), array) === -1 && $.inArray(String(value), array) === -1) {
+                return false;
+            } else {
+                return true;
+            }
+        }
+
+        // Select field
+        else if ($(this)[0].tagName === 'SELECT') {
+
+            if ($.inArray(Number(ui.item.option.value), array) === -1 && $.inArray(String(ui.item.option.value), array) === -1) {
+                return false;
+            } else {
+                return true;
+            }
+        }
+
+        // Text field
+        else if ($(this)[0].tagName === 'INPUT' && ($(this).attr('type') == 'text' || $(this).attr('type') == 'hidden')) {
+            if ($.inArray(Number($(this).val()), array) === -1 && $.inArray(String($(this).val()), array) === -1) {
+                return false;
+            } else {
+                return true;
+            }
+        }
+
+        // Textarea field
+        else if ($(this).tagName === 'TEXTAREA') {
+            if ($.inArray(Number($(this).val()), array) === -1 && $.inArray(String($(this).val()), array) === -1) {
+                return false;
+            } else {
+                return true;
+            }
+        }
+    },
+
+    // ------------------------------------------------------------------------
+
+    /**
+     * Hide
+     *
+     * Hides a field and it's label - used by display_if.
+     *
+     */
+    _hide : function() {
+        var self = $(this);
+        self.find('input,textarea,select').addClass('ignore').attr('disabled', 'disabled');
+		self.hide();
+
+        return self;
+    },
+
+    // ------------------------------------------------------------------------
+
+    /**
+     * Show
+     *
+     * Shows a field and it's label - used by display_if.
+     *
+     */
+    _show : function() {
+    	var self = $(this);
+    	self.Form('show_effect');
+    	self.find("input[id$=alt]").removeClass('ignore').attr('disabled', false);
+    	self.find('input:visible,textarea:visible,select,input[type=hidden]').removeClass('ignore').attr('disabled', false);
+
+        return self;
+    },
+
+    // ------------------------------------------------------------------------
+
+    /**
+     * Show Effect
+     *
+     * Shows a field with an animation effect
+     *
+     */
+    show_effect : function() {
+
+        $(this)
+        .css('opacity', 0)
+        .slideDown('slow')
+        .animate(
+            { opacity: 1 },
+            { queue: false, duration: 'slow' });
+
+        return $(this);
+    },
+
+    // ------------------------------------------------------------------------
+
+    /**
+     * Autofill
+     *
+     * Used to autofill a field depending on the value of another field
+     *
+     */
+    autofill : function( options ) {
+
+        var self = $(this);
+
+        $('form [name="' + options.on + '"]').on( "change", function(event, ui) {
+
+                var value = options['with'][$(this).val()];
+                console.log(options.with);
+                console.log($(this).val());
+
+                if (value) {
+                   if (self.hasClass('hasDatepicker')) {
+                       var date = value.split(/-/);
+                       self.datepicker('setDate', new Date(date[0],date[1],date[2]));
+                   } else {
+                       self.val(value);
+                   }
+                }
+        });
+
+    },
+
+    // ------------------------------------------------------------------------
+
+    /**
+     * File Ajax
+     *
+     * Setup Ajax file uploader, uses  valums file-uploader
+     * @see https://github.com/valums/file-uploader
+     *
+     */
+    file_ajax : function( options ) {
+
+		// Confirm overwrite when clicking button
+		if ( ! options.allow_multi && options.files_uploaded > 0) {
+			$(document)
+				.off('.upload')
+				.on('click.upload', '.qq-upload-button', function(e, overwrite, noConfirm){
+
+					var self = $(this);
+
+					if ( ! overwrite) {
+						e.preventDefault();
+					}
+
+					if ( ! noConfirm) {
+						$.fn.Util('confirm', {
+		        			title: "Confirm Overwrite",
+		        			message: "Are you sure you want to overwrite the existing file?",
+		        			continue_handler: function(){
+		        				self.find('input').trigger('click', [true, true]);
+		        			}
+		        		});
+					}
+
+				});
+		}
+
+		// Create file uploader
+        var upload_id = $('#' + options.id).next().val();
+		var that = this;
+        var ajax_file_uploader = new qq.FileUploader({
+            element: document.getElementById(options.id),
+            action: base_url + 'upload',
+            debug: true,
+            multiple: options.allow_multi ? true : false,
+            allowedExtensions: options.allowed_types,
+            sizeLimit: 50 * 1024 * 1024,
+            onSubmit : function(file, ext) {
+            	$('#' + options.id).closest('form').find('input.submit').attr('disabled', 'disabled');
+            	if ( ! options.allow_multi) {
+	            	$('.qq-upload-list').empty();
+            	}
+                ajax_file_uploader.setParams({
+                    upload_id: upload_id,
+                    id: options.ids,
+                    allow_multi: options.allow_multi
+                });
+            },
+            onComplete : function(file, ext) {
+            	$('#' + options.id).closest('form').find('input.submit').removeAttr('disabled');
+            }
+        });
+
+
+        // Confirm overwrite when dropping files
+        $(document)
+        	.off('before-drop')
+        	.on('before-drop', '.qq-upload-drop-area', function(e, dropEvent){
+
+	        	var self = $(this);
+	        	// Warn overwrite
+	        	if ( ! options.allow_multi && options.files_uploaded > 0) {
+
+	        		if (dropEvent.dataTransfer.files.length > 1)
+	        		{
+	        			$.fn.Util('dialog_message', 'Single File Upload', 'Cannot upload multiple files: you must drag and drop a single file');
+	        		} else {
+						self.data('confirmed', true);
+		        		$.fn.Util('confirm', {
+		        			title: "Confirm Overwrite",
+		        			message: "Are you sure you want to overwrite the existing file?",
+		        			continue_handler: function(){
+		        				ajax_file_uploader._uploadFileList(dropEvent.dataTransfer.files);
+		        				$(document).off('before-drop');
+		        			}
+		        		});
+	        		}
+	        	} else {
+	        		ajax_file_uploader._uploadFileList(dropEvent.dataTransfer.files);
+	        	}
+
+	        	self.trigger('drop', [dropEvent, true]);
+	    		dropEvent.preventDefault();
+	        });
+
+        // Populate field
+        if (options.files_uploaded > 0) {
+        	$('ul.qq-upload-list').show();
+        	$.each(options.files, function(i, file) {
+        		$('ul.qq-upload-list').append('<li class=" qq-upload-success"><span class="qq-upload-file">' + file.metadata.filename + '</span><span class="qq-upload-size" style="display: inline;">' + file.metadata.size_display + '</span></li>');
+        	});
+        }
+    }
+
+  };
+
+  // ----------------------------------------------------------------------
+
+  /**
+   * Setup method handler
+   */
+  $.fn.Form = function( method ) {
+        if ( methods[method] ) {
+          return methods[ method ].apply( this, Array.prototype.slice.call( arguments, 1 ));
+        } else if ( typeof method === 'object' || ! method ) {
+          return methods.init.apply( this, arguments );
+        } else {
+          $.error( 'Method ' +  method + ' does not exist on jQuery.Form' );
+        }
+    };
+})( jQuery );

@@ -1,0 +1,110 @@
+/**
+ * jquery.Autofill
+ *
+ * Autofills a form field based on the value of another form field.
+ *
+ * @author Robert Corley
+ */
+;(function($) {
+    $.widget( "gigabyte.Autofill", {
+
+        /**
+         * Default Options
+         */
+        options: {
+            with: null,
+            on: null,
+            _values: null,
+            _trigger_field: null,
+            _form: null
+        },
+
+        /**
+         * Constructor
+         */
+        _create: function() {
+            this.options._form = this.element.closest('form');
+            console.log(this.options._form);
+
+            // Get the field we are either taking the autofill value from, or
+            // selecting from the options on
+            if($.type(this.options.with) === 'string' && $('[name=' + this.options.with + ']', this.options._form)) {
+                this.options._trigger_field = $('[name=' + this.options.with + ']', this.options._form);
+            }
+            if($('[name=' + this.options.on + ']', this.options._form).length) {
+                this.options._trigger_field = $('[name=' + this.options.on + ']', this.options._form);
+            }
+            if ( ! this.options._trigger_field) {
+                $.error('The field you want to autofill from cannot be located, check the field name supplied');
+            }
+
+            this._setup_handler();
+
+            if ( ! this.element.val()) {
+                this.options._trigger_field.trigger("change");
+            }
+        },
+
+        /**
+         * Setup Handler
+         *
+         * Sets up the event handler to generate the correct fields when the
+         * trigger field changes.
+         *
+         */
+        _setup_handler: function() {
+            var that = this;
+            this.options._trigger_field.on("change", function(element) {
+
+                var value = that._get_value();
+                console.log(value);
+
+                if (value !== undefined) {
+                   if (that.element.hasClass('hasDatepicker')) {
+                       var date = value.split(/-/);
+                       that.element.datepicker('setDate', new Date(date[0],date[1],date[2]));
+                   } else {
+                       that.element.val(value);
+                   }
+                   that.element.trigger('change');
+                }
+            });
+        },
+
+        /**
+         * Get Value
+         *
+         * Gets the value for a field.
+         */
+        _get_value: function() {
+            var trigger_value = this.options._trigger_field.val();
+            console.log(trigger_value);
+            this._populate_values()
+            console.log(this.options._values);
+            if (this.options._values) {
+                if (trigger_value && this.options._values[trigger_value] !== undefined) {
+                    return this.options._values[trigger_value];
+                }
+            } else {
+                return trigger_value;
+            }
+        },
+
+        /**
+         * Populates the values to select the autofill value from. This may
+         * come from the OptionCache if the options have been cached on the
+         * parent page for a modal form.
+         */
+        _populate_values: function() {
+            if ($.type(this.options.with) === 'object' || $.type(this.options.with) === 'array') {
+                this.options._values = this.options.with;
+            } else {
+                var hash = this.options.with;
+                var values = $(document).OptionCache( "option", hash );
+                if (values) {
+                    this.options._values = values;
+                }
+            }
+        }
+    });
+})(jQuery);

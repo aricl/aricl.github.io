@@ -1,0 +1,463 @@
+/**
+ * jquery.Budget
+ *
+ * Defines client-side behaviour for Budget template setup. Primarily used
+ * for the ajax requests on the 'Assign units to schedules' table.
+ *
+ * @author Robert Corley
+ *
+ */
+
+;(function( $ ){
+
+  // /$.fn.Budget.valid = 0;
+
+  var methods = {
+
+    /**
+     * Units to Schedules
+     *
+     * Defines the client side behaviour for the 'assign units to schedules'
+     * part of the template setup process. Sets up handler for the 'tick box'
+     * columns and calculates total percentages when the table loads.
+     *
+     *
+     */
+    units_to_schedules : function( site_id, budget_id, edit, allow_incomplete_apportionments ) {
+
+        // Get datatables object
+        var table_id = $(this).attr('id');
+        var self = $(this);
+
+        // Remove select all tickbox on percentage columns
+        $('th.percentage span').removeClass('selectable');
+
+        // Add click handler for select all tickboxes on 'equal' columns
+        //$('th span').remove();
+        /*$('th.equal span').off('click');
+        $('th.equal span').on('click',function(){
+
+           var col_index = $(this).parent().index();
+
+           self.find('tr:not(.headings)').each(function(){
+               // /console.log($(this));
+               $(this).children().eq(col_index).find('span').click();
+           });
+        });*/
+
+        // Add copy down button on percentage columns
+        if (edit)
+        {
+	        $('th.percentage').each(function(){
+
+	           var col_index = $(this).index();
+
+	           self.find('tr').not('.headings').each(function(){
+	               $(this).children().eq(col_index).find('.copy-down').remove();
+	               $(this).children().eq(col_index).append($('<a href="#" class="down-arrow action copy-down"></a>'));
+	           });
+
+	           // Hide last copy down link, since no row to copy to below the last one!
+	           // hide rather than simply not render so the content lines up.
+	           $(document).on('dataTablesOnDraw',function(){
+	               self.find('tr:last a.copy-down').css('visibility','hidden');
+	           });
+
+	        });
+
+	        // Attach handler to copy down buttons
+	        $('.copy-down').Budget('copy_down');
+
+	        // Remove <a> from cell before the cell is passed to the datatables editable plugin
+	        $('td.percentage').click(function(e){
+		        if ($(this).find('input').length === 0) {
+		            $(this).html($(this).Budget('get_num_from_html'));
+		        }
+	        });
+        }
+
+        $(this).on('editable-edited',function(event, old_value, new_value, row, col){
+            $(window[table_id].fnGetNodes(row).cells[col]).find('.copy-down').remove();
+            $(window[table_id].fnGetNodes(row).cells[col]).append($('<a href="#" class="down-arrow action copy-down"></a>').Budget('copy_down'));
+        });
+
+		if (edit)
+		{
+	        // Prepare 'equal' share type cells
+	        $(this).find('td.equal').each(function(){
+
+	            // Add 'selected' class to equal cells which have a value > 0.5
+	            //console.log(Number($(this).html()) );
+	            if (Number($(this).html()) > 0.5) {
+	                $(this).html('<span class="selectable"></span>')
+	                .addClass('selected');
+	            } else {
+	                $(this).html('<span class="selectable"></span>');
+	            }
+
+	            // Add <span> to cells for the 'tick' background image to be added to
+	            //$(this).html('<span class="selectable"></span>');
+
+	        });
+		}
+
+        $(document).on('focus','td form input',function(){
+            var input = $(this);
+            input.val($('<div>' + input.val() + '</div>').text());
+        });
+
+        // Calculate totals for equal share type columns
+        $.fn.Budget('update_number_selected', edit);
+
+
+        // Add up total percentages and setup handler for updating percentages
+        $(this).Budget('total_percent_col');
+        if (edit) {
+	        $(this).on('editable-edited',function(event,old_value,new_value,row,col){
+	           $(this).Budget('add_to_percent_col', new_value - Number(old_value.split(/</)[0]), col);
+	        });
+        }
+
+        if (edit)
+        {
+	        // Bind click handler to submit and continue links to check all values are 100% before allowing to continue
+            if ( ! allow_incomplete_apportionments) {
+                $('h2 li.next a,.content-box-nav li.next a').on('click',function(e){
+                    e.stopPropagation();
+                    e.preventDefault();
+                    if ( $.fn.Budget('check_percentages') == true ){
+                        window.location = $(this).attr('href');
+                    } else {
+                        $.fn.Util('dialog_message', 'Total Percentages Must Be 100%','All percentages must add up to exactly 100% before continuing the budget template setup');
+                    }
+                });
+            }
+
+	        // Bind click event to cells
+	        $(this).on("click", "td.equal span", function(e,oTable) {
+	            self = $(this);
+	            e.stopImmediatePropagation();
+	            e.stopPropagation();
+	            oTable = $(document).Table();
+
+	            // Ajax request
+	            $.ajax({
+	              type: 'POST',
+	              url: base_url + 'site/' + site_id + '/budget_template/units_to_schedules_edit_ajax/' + budget_id ,
+	              data: { columnId: oTable.fnGetPosition(self.parent().get(0))[1],
+	                      value: self.parent().hasClass('selected') ? 0 : 0.9,
+	                      id: self.parent().parent().attr('id')
+	              },
+	              success: function(data) {
+	                  //$('#' + table_id.replace(/table_/,'')).find('.table-loading').hide();
+	                  if ( data.error !== undefined ) {
+	                      $.fn.Util('show_message',data.error);
+	                  } else {
+	                      self.parent().toggleClass("selected").trigger('selection-changed');
+	                  }
+	              },
+	              dataType: "JSON"
+	            });
+	        });
+
+        }
+
+        return $(this);
+    },
+
+    // ------------------------------------------------------------------------
+
+    /**
+     * Copy Down
+     *
+     * Attaches a 'copy down' click handler which copies the value of one cell
+     * into the cell directly below.
+     *
+     */
+    copy_down : function() {
+
+        $(this).click(function(e){
+
+            e.preventDefault();
+            e.stopPropagation();
+
+            var td = $(this).parent();
+
+            td.Table('next_cell_vertically')
+            .click()
+            .find('input')
+            .val(td.html())
+            .blur();
+
+        });
+
+        return $(this);
+    },
+
+    // ------------------------------------------------------------------------
+
+    /**
+     * Calculate Total Percentages in a Column
+     *
+     * Calculates the total percentage in a 'percentage' share type column
+     * and displays it in the column header.
+     *
+     */
+    total_percent_col : function() {
+
+        self = $(this);
+        $('table.display').eq(0).find('th.percentage').each(function(){
+
+            var th = $(this);
+            var col_index = Number($(this).parent().children().index($(this))) + 1;
+            var percentage = 0;
+
+            $('table.display tr td:nth-child(' + col_index + ')').each(function(){
+                percentage += $(this).Budget('get_num_from_html');
+            });
+
+            var red = '';
+            if ( Math.abs(percentage - 100) > $(this).attr('data-check-tolerance'))
+            {
+                // Set variable for <th> class to make total value red
+                red = 'red';
+
+                // Make column cells red
+                var trs = $('table.display tbody tr');
+                trs.each(function(){
+                    $(this).children().eq(col_index -1).addClass('red');
+                });
+            }
+
+            th.find(".totals").remove();
+            th.append('<span class="totals"><br>Total: &nbsp;<span class="total-col ' + red  + '">' + $.fn.Util('round', percentage, 3) + '%</span></span>');
+
+            $('table.display').Table().Table('table_resize');
+
+        });
+
+        return $(this);
+    },
+
+    // ------------------------------------------------------------------------
+
+    /**
+     * Update Number Selected
+     *
+     * Calculates the total number of units selected & total percentage for all
+     * equal share type columns.
+     *
+     */
+    update_number_selected : function(edit) {
+
+        $('div.dataTables_scrollHead th.equal').each(function(){
+            $(this).append('<br>Total: <span class="total-num">0</span>');
+        });
+
+        $(document).on('selection-changed',function(){
+            $('div.dataTables_scrollHead th.equal').each(function(){
+                var index = $(this).index() + 1;
+                if ( ! edit) {
+                	var num_selected = $('div.dataTables_scrollBody td:nth-col(' + index + ')').filter(":not(:contains('0.00000'))").length;
+                } else {
+	                var num_selected = $('div.dataTables_scrollBody td:nth-col(' + index + ')').filter(".selected").length;
+                }
+                var percentage = num_selected * $(this).attr('data-percentage');
+                if (Math.abs(percentage - 100) > $(this).attr('data-check-tolerance')) {
+                    var span = '<span class="red total-col">';
+                } else {
+                    var span = '<span class="total-col">';
+                }
+
+                $('span.total-num',this).html(num_selected+'<br>Percentage: '+span+$.fn.Util('round',percentage,2)+'%</span>');
+            });
+        });
+        $(document).trigger('selection-changed');
+
+        return $(this);
+    },
+
+    // ------------------------------------------------------------------------
+
+    /**
+     * Adds a value to the total percentage for a column
+     *
+     * Add the supplied value to the total percentage in the specified column
+     * index.
+     *
+     */
+    add_to_percent_col : function( value, col_index ) {
+
+        var th = $($('table.display tr.headings').children()[col_index]);
+        var trs = $('table.display tbody tr');
+        var percentage = Number(th.find('.total-col').html().replace('%','')) + value;
+        if ( Math.abs(percentage - 100) > th.attr('data-check-tolerance'))
+        {
+            th.find('.total-col').addClass('red');
+            trs.each(function(){
+                $(this).children().eq(col_index).addClass('red');
+            });
+        } else {
+            th.find('.total-col').removeClass('red');
+            trs.each(function(){
+                $(this).children().eq(col_index).removeClass('red');
+            });
+        }
+        th.find('.total-col').html($.fn.Util('round', percentage, 3) + '%');
+        return $(this);
+    },
+
+    // ------------------------------------------------------------------------
+
+    /**
+     * Check Percentages
+     *
+     * Check to see if all percentage columns add up to 100%. Used to check
+     * before allowing user to continue with the budget setup.
+     *
+     */
+    check_percentages : function() {
+
+        var valid = true;
+        var ths = $('table.display tr.headings').children();
+
+        ths.each(function(){
+            if ( $(this).find('.total-col').length != 0 ) {
+                if ( $(this).find('.total-col').hasClass('red') === true ) {
+                    valid = false;
+                }
+            }
+        });
+
+        return valid;
+    },
+
+    // ------------------------------------------------------------------------
+
+    /**
+     * Adds To Total Percentage Row
+     *
+     * Add the supplied value to the total percentage in the specified row
+     * index.
+     *
+     */
+    add_to_percent_row : function( value, row_index, table_id ) {
+
+        oTable = $(document).Table();
+        td = $(oTable.fnGetNodes( row_index ));
+        var percentage = Math.round(1000*(Number(td.find('.total').html().replace(/%/,'')) + value))/1000;
+
+        if (percentage === 100)
+        {
+            td.find('.total').removeClass('red');
+            td.children().filter(':not(:eq(0))').each(function(){
+                    $(this).removeClass('red');
+            });
+        } else {
+            td.find('.total').addClass('red');
+            td.children().filter(':not(:eq(0))').each(function(){
+                    $(this).addClass('red');
+            });
+        }
+        td.find('.total').html(percentage + '%');
+        return $(this);
+    },
+
+    // ------------------------------------------------------------------------
+
+    /**
+     * Check Percent Row
+     *
+     * Check to see if all percentage rows add up to 100%. Used to check
+     * before allowing user to continue with the budget setup.
+     *
+     */
+    check_percent_row : function() {
+
+        var valid = true;
+        var tds = $('table.display tbody tr').children(':first-child');
+
+        tds.each(function(){
+            if ( $(this).find('.total').length != 0 ) {
+                var percentage = Number($(this).find('.total').html().replace('%',''));
+                if ( percentage != 100 ) {
+                    valid = false;
+                }
+            }
+        });
+
+        return valid;
+    },
+
+    // ------------------------------------------------------------------------
+
+    /**
+     * Update Row Values
+     *
+     * Update the schedule row values on the edit budget page
+     *
+     */
+    update_row_values : function( amount, row_index, oTable ) {
+
+        var tr = $('tbody',oTable[0]).children().eq(row_index);
+
+        $(tr).children(':not(:first-child,:nth-child(2))').each(function(){
+            $(this).html( Number( (Number(amount.replace(',','')) * Number($(this).data('percentage')/100))).format('0,000.00') );
+        });
+
+        oTable.Budget('add_column_totals', '.schedule', 'Total:');
+
+        return $(this);
+    },
+
+
+    // ------------------------------------------------------------------------
+
+    /**
+     * Add Column Totals
+     *
+     * Calculate totals for each column matched by the selector supplied
+     * and add the total (prefixed by 'text') to the corresponding <th>
+     * in <thead>.
+     *
+     * The selector should match <th>'s for the columns that need a total.
+     *
+     * A <table> element should be the function context.
+     *
+     */
+    add_column_totals : function( selector, text ) {
+        var table = this;
+        $(selector, $('thead:first',$(this).parent().prev())).each(function(){
+           var total = table.Table('column_total', $(this).index());//.format('0,000.00');
+           $('span.total',this).remove();
+           $('br.total',this).remove();
+           $(this).append($('<br class="total"><span class="total" style="width:100%">'+text+' '+total+'</span>'));
+        });
+    },
+
+    // ------------------------------------------------------------------------
+
+    /**
+     * Returns the first number that appears inside the html of the wrapped set.
+     *
+     */
+    get_num_from_html : function() {
+       return Number(String($(this).html()).match(/\d+\.?\d+/));
+    },
+
+  };
+  // ----------------------------------------------------------------------
+
+  /**
+   * Setup method handler
+   */
+  $.fn.Budget = function( method ) {
+        if ( methods[method] ) {
+          return methods[ method ].apply( this, Array.prototype.slice.call( arguments, 1 ));
+        } else if ( typeof method === 'object' || ! method ) {
+          return methods.init.apply( this, arguments );
+        } else {
+          $.error( 'Method ' +  method + ' does not exist on jQuery.Budget' );
+        }
+  };
+})( jQuery );

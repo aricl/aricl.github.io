@@ -1,0 +1,81 @@
+$(document).ready(function() {
+
+    // Disabled form submit
+    $('#search-field').on('focus',function(e){
+        this.select();
+
+    });
+
+    // Disabled form submit
+    $('#search form').on('submit',function(e){
+        e.stopPropagation();
+        e.preventDefault();
+    });
+
+    // Setup Search Autocomplete field
+    $( "#search-field" ).autocomplete({
+        selectFirst: true,
+        html: true,
+        source: function(request,response){
+            $.ajax({
+                url: base_url + "search",
+                dataType: "json",
+                type: "POST",
+                data: {
+                    q: request.term
+                },
+                success: function( data ) {
+                    response(data);
+                }
+            });
+        },
+        dataType: "json",
+        minLength: 4,
+        delay: 1000,
+        select: function( event, ui ) {
+           // Stop default value from being put into input box
+           event.preventDefault();
+
+           // Strip tags from item value and put just the text into the input box
+           var value = $('<div>' + ui.item.value + '</div>');
+           stripped_value = value.text();
+           $(this).val(stripped_value);
+
+           // Parse input value and redirect to correct place
+           var arr = stripped_value.split(':');
+           var type = arr[0];
+
+           if (type == 'Site') {
+               var site_arr = arr[1].split('-');
+               site_id = $.trim(site_arr[0]);
+               window.location = base_url + 'site/' + site_id + '/dashboard';
+
+           } else if (type == 'Owner') {
+               var res_arr = arr[1].split('-');
+               resident_ref = $.trim(res_arr[0]) + '-' + $.trim(res_arr[1]);
+               window.location = base_url + 'resident/' + resident_ref + '/dashboard';
+           } else if (type == 'Works Order') {
+               var wo_arr = arr[1].split('-');
+               wo_id = $.trim(wo_arr[0].replace(/#/,'').replace(/\([0-9|_]+\)/,''));
+               window.location = base_url + 'works_orders/all/' + wo_id;
+
+           }
+        }
+    });
+
+    $("#search-field").keypress(function(e) {
+        if(e.keyCode == 13) { // if it's enter
+            window.location = base_url + 'search?q=' + $('#search-field').val();
+        }
+    });
+
+    $("#search-field").on("autocompletefocus", function(event, ui) {
+        // hack to update the text before it's written to the input
+        var tmp = $('<div></div>');
+        var text = tmp.html(ui.item.value).text();
+
+        ui.item.label = text;
+        ui.item.value = text;
+    });
+
+});

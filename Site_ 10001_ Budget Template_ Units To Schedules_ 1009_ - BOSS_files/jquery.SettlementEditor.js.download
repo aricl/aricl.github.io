@@ -1,0 +1,193 @@
+/**
+ * jquery.SettlementEditor
+ *
+ * Client side stuff for the settlement editor, to highlight rows and such
+ *
+ * @author Robert Corley
+ *
+ */
+;(function($) {
+    $.widget( "gigabyte.SettlementEditor", {
+
+        /**
+         * Default Options
+         *
+         */
+        options: {
+            residentId: null,
+            creditTable: null,
+            debitTable: null,
+            settlementsTable: null,
+            allRowSelector: '.dataTables_scrollBody tr',
+            selectedClass: 'settlements__tr--selected',
+            filteredClass: 'settlements__tr--filtered',
+            highlightedClass: 'settlements__tr--highlighted',
+            _selectedRow: null,
+        },
+
+        /**
+         * Constructor
+         *
+         */
+        _create: function() {
+            var that = this;
+
+            that.options.creditTable = $('#' + that.options.creditTableId).find('.dataTables_scrollBody').Table();
+            that.options.debitTable = $('#' + that.options.debitTableId).find('.dataTables_scrollBody').Table();
+            that.options.settlementsTable = that.element.find('.dataTables_scrollBody').Table();
+
+            $(that.options.settlementsTable).on('datatables.onDraw', function () {
+                that._setupTables();
+            });
+
+            $(that.options.creditTable).on('datatables.onDraw', function () {
+                that._setupTables();
+            });
+
+            $(that.options.debitTable).on('datatables.onDraw', function () {
+                that._setupTables();
+            });
+
+            // TODO: selecting the row again after refresh isn't working
+            var triggers = 0;
+            $(document).on('settlementEditor.filterTableSetup', function () {
+                triggers ++;
+                if (triggers == 45) {
+                    triggers = 0;
+                    console.log('click for previous row selection triggered');
+                    if (that.options._selectedRow) {
+                        console.log($('#' + $(that.options._selectedRow).attr('id')));
+                        $('#' + $(that.options._selectedRow).attr('id')).trigger('click.settlementEditor');
+                    }
+                }
+            });
+        },
+
+        /**
+         * Setup Filter Tables
+         */
+        _setupTables: function () {
+            var that = this;
+            $(that.options.creditTable).off('hover.settlementEditor click.settlementEditor');
+            that._setupFilterTable(that.options.creditTable, that.options.debitTable, 'credit/debit/' + that.options.residentId);
+            that._setupFilterTable(that.options.creditTable, that.options.settlementsTable, 'credit/settlement/' + that.options.residentId);
+            that._setupFilterTable(that.options.debitTable, that.options.creditTable, 'debit/credit/' + that.options.residentId);
+            that._setupFilterTable(that.options.debitTable, that.options.settlementsTable, 'debit/settlement/' + that.options.residentId);
+            that._setupSettlementTableSelection();
+        },
+
+        /**
+         * Sets up selection and highlighting handlers for clicking and hovering
+         * on rows in the credit or debit tables
+         */
+        _setupFilterTable: function(filterTable, filteredTable, url) {
+            var that = this;
+            $.ajax(base_url + 'settlements/mapping/' + url, {
+                dataType: 'json',
+                success: function(data) {
+                    that._removeAllClasses();
+
+                    $.each(data, function (pivotRowId, rowsToHighlight) {
+                        var rowSelector = '#' + filterTable.attr('id') + '-' + pivotRowId;
+                        $(filterTable).on('hover.settlementEditor click.settlementEditor', rowSelector, function(e) {
+                            $('tr', filteredTable).removeClass(that.options.highlightedClass);
+                            if (e.type == 'click') {
+                                console.log('click trigger on row');
+                                that.options._selectedRow = this;
+                                $('tbody tr', filteredTable).removeClass(that.options.filteredClass);
+                                $('tbody tr', filteredTable).removeClass(that.options.selectedClass);
+                                $('tbody tr', filterTable).removeClass(that.options.filteredClass);
+                                $('tbody tr', filterTable).removeClass(that.options.selectedClass);
+                                $(this).addClass(that.options.selectedClass);
+                            }
+                            $.each(rowsToHighlight, function (index, rowId) {
+                                var highlightedRow = that._highlightRow(filteredTable, rowId, e.type);
+                                if (e.type == 'click' && index == 0) {
+                                    $(filteredTable.parent()).scrollTo(highlightedRow);
+                                }
+                            });
+                        });
+                        $('.dataTables_scrollBody').on('mouseout', function() {
+                            $(that.options.allRowSelector).removeClass(that.options.highlightedClass);
+                        });
+                    });
+                    $(filterTable).trigger('settlementEditor.filterTableSetup');
+                },
+                error: function() {
+                    console.log('An error occurred');
+                }
+            });
+        },
+
+        /**
+         * Sets up selection and highlighting handlers for clicking and hovering
+         * on rows in the settlements table
+         * @return object   the row that was highlighted
+         */
+        _highlightRow: function(table, rowId, eventType) {
+            var className = eventType == 'click' ? this.options.filteredClass : this.options.highlightedClass;
+            var rowSelector = '#' + table.attr('id') + '-' + rowId;
+            $(rowSelector, table).addClass(className);
+
+            return $(rowSelector);
+        },
+
+        /**
+         * Sets up selection and highlighting handlers for clicking and hovering
+         * on rows in the settlements table
+         */
+        _setupSettlementTableSelection: function() {
+            var that = this;
+            var settlementsTable = that.options.settlementsTable;
+            $.ajax(base_url + 'settlements/mapping/settlements/for/' + that.options.residentId, {
+                dataType: 'json',
+                success: function(data) {
+                    that._removeAllClasses();
+                    $.each(data, function (pivotRowId, rowsToHighlight) {
+                        var rowSelector = '#' + settlementsTable.attr('id') + '-' + pivotRowId;
+                        $(settlementsTable).on('hover.settlementEditor click.settlementEditor', rowSelector, function(e) {
+                            $('tr', that.options.creditTable).removeClass(that.options.highlightedClass);
+                            $('tr', that.options.debitTable).removeClass(that.options.highlightedClass);
+                            if (e.type == 'click') {
+                                that._removeAllClasses();
+                                $(this).addClass(that.options.selectedClass);
+                            }
+                            var creditRow = that._highlightRow(that.options.creditTable, rowsToHighlight[0].creditId, e.type);
+                            var debitRow = that._highlightRow(that.options.debitTable, rowsToHighlight[0].debitId, e.type);
+                            if (e.type == 'click') {
+                                $(that.options.creditTable.parent()).scrollTo(creditRow);
+                                $(that.options.debitTable.parent()).scrollTo(debitRow);
+                            }
+                        });
+                        $('.dataTables_scrollBody').on('mouseout', function() {
+                            $(that.options.allRowSelector).removeClass(that.options.highlightedClass);
+                        });
+                    });
+                    $(settlementsTable).trigger('settlementEditor.filterTableSetup');
+                },
+                error: function() {
+                    console.log('An error occurred');
+                }
+            });
+        },
+
+        /**
+         * Removes all the higlighted, selected etc... classes for when the tables
+         * are refreshed
+         */
+        _removeAllClasses: function() {
+            $(this.options.allRowSelector).removeClass(this.options.highlightedClass);
+            $(this.options.allRowSelector).removeClass(this.options.filteredClass);
+            $(this.options.allRowSelector).removeClass(this.options.selectedClass);
+        },
+
+        /**
+         * Get Value
+         *
+         * Gets the value for a field.
+         */
+        _get_value: function( name ) {
+
+        }
+    });
+})(jQuery);

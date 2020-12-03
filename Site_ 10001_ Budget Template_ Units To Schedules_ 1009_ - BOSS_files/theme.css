@@ -1,0 +1,170 @@
+@import url(../default.css);
+
+html {
+    background: #efefef;
+}
+body {
+    background: #efefef;
+    color: #454348;
+}
+
+#topheader {
+    color: #fff;
+    background: #454348;
+
+}
+#topheader h1 {
+    background-image: url(header-logo.png);
+}
+
+header h1 {font-weight: 600;color: #E4361D;}
+
+#topheader .hr {
+
+}
+
+.box {
+    border: 0px solid #e3e3e1;
+}
+
+/* Content Box stuff */
+.content-menu li a {color:#454348;font-weight:700;}
+
+
+
+/* Menu */
+header ul {padding:0;margin:0;}
+header ul li{margin:0 7px 10px 0;}
+.notifications::before{   content: attr(data-content);
+    display: inline-block;
+    width: 22px;
+    height: 22px;
+    margin-top:12px;
+    line-height:22px;
+    -moz-border-radius: 11px;
+    -webkit-border-radius: 11px;
+    border-radius: 11px;
+    background-color: #939395;}
+.notifications.hasNotifications::before {background:#E4361D}
+li.notifications a {background-position:-1063px -35px;height:20px;padding-top:10px;}
+li.notifications a:hover {background-position:-1063px -104px;height:20px;padding-top:10px;}
+.support::before{   content: attr(data-content);
+    display: inline-block;
+    position:absolute;
+    width: 22px;
+    height: 22px;
+    margin-top:10px;
+    line-height:22px;
+    -moz-border-radius: 11px;
+    -webkit-border-radius: 11px;
+    margin-bottom:-23px;
+    margin-left:-7px;
+    z-index:1;}
+
+li.support.hasWatchedTickets a {
+    background-position: -1137px -69px;
+}
+ul.tabs li a {font: 500 1.3em museo-sans-rounded, Helvetica, Arial, sans-serif;color:#fff;padding:7px 14px;background:#e4361d;display:block;float:left;border-radius:5px;line-height:28px;}
+/*ul.tabs li a:hover {color:#bc3f27;-moz-box-shadow: 0 0 2px 3px #b5b5b5;-webkit-box-shadow:0 0 2px 3px #b5b5b5;box-shadow:0 0 2px 3px #b5b5b5;}*/
+ul.tabs ul li a:active,ul.tabs li a.sel, ul.tabs li a:hover, .content-box-inner a.sel {background:#454348;text-decoration:none;}
+.content-box-inner a.inline-tab {line-height: 25px; padding: 0 8px; margin: 10px 0}
+
+#page-info a, #page-info{color:#fff;}
+
+nav ul li a {background-image:url(menu.png)}
+
+/*____________ ~search~ ____________ */
+#search input{display:block;width:220px;height:42px;padding-left:40px;border-width:0;border-radius:0;outline: none;box-shadow: none;}
+
+.content-box .hr {background:#efefef;}
+
+.content-box h2, body .ui-dialog .ui-dialog-titlebar {background:#e1e1e1;color:#454348;}
+.content-box h2 {}
+
+.content-box {background-color:#e1e1e1;border-width:1px 0;}
+.content-box-innner {border-style:solid;border-color:#adadad;border-bottom-color:#8b8b8c;border-width:0 1px 1px;}
+
+.content-box__description {background:#e4361d;color:#fff;font-family:museo-sans-rounded, Helvetica, Arial, sans-serif;}
+
+/* Form styles */
+input.submit:hover, .qq-upload-button:hover {background:#454348;}
+input.submit:active, .qq-upload-button:active {outline:none;}
+input.submit, .qq-upload-button {background:#E4361D;color:#fff;outline:none;border:0;}
+input.submit[disabled=disabled] {background: #767479;color:#ADADAD;outline:none;border:0;}
+
+/* Table colours */
+td h5 {font: 500 1.3em museo-sans-rounded, Helvetica, Arial, sans-serif;color:#000;margin:7px 0 5px;}
+
+/* Colours */
+table.display thead th {background:#fff;color:#454348;font: 500 1.05em museo-sans-rounded, Helvetica, Arial, sans-serif;}
+body tbody tr.odd td.sorting_1 {background-color: #ffdcdc;}
+body tbody tr.odd td.sorting_2 {background-color: #ffdcdc;}
+body tbody tr.odd td.sorting_3 {background-color: #ffdcdc;}
+body tbody tr.even td.sorting_1 {background-color: #ffecec;}
+body tbody tr.even td.sorting_2 {background-color: #ffecec;}
+body tbody tr.even td.sorting_3 {background-color: #ffecec;}
+body tr.odd,.dataTables_scrollBody table{background-color: #fff;}
+body tr.odd,body tr.even{border-bottom:1px solid #ccc;}
+
+/* Hover colours */
+body tbody tr.odd:hover td.sorting_1 {background-color: #d1d1d1;}
+body tbody tr.odd:hover td.sorting_2 {background-color: #f02e24;}
+body tbody tr.odd:hover td.sorting_3 {background-color: #f02e24;}
+
+body tbody tr.even:hover td.sorting_1 {background-color: #d1d1d1;}
+body tbody tr.even:hover td.sorting_2 {background-color: #f02e24;}
+body tbody tr.even:hover td.sorting_3 {background-color: #f02e24;}
+body tr.even:hover,body tr.odd:hover{background-color:#e1e1e1;color:#939393;}
+
+/* Selected row styles */
+body tbody tr.odd td.selected,body tbody tr.odd:hover td.selected,
+body tbody tr.even td.selected,body tbody tr.even:hover td.selected {background-color:#F02E24;color:#fff;}
+
+tr.DTTT_selected.odd {background: #d7d7d9}
+tr.DTTT_selected.even {background: #e4e4e6}
+tr.DTTT_selected.odd td.sorting_1 {background: #f9d6d6}
+tr.DTTT_selected.even td.sorting_1 {background: #fdeaea}
+
+
+/* Filter field styles */
+.Table-filter:focus {outline-color:#F02E24}
+
+/* Row Buttons */
+.content-box-inner .button {background:#E4361D;color:#fff}
+.content-box-inner .button:hover {background:#454348;}
+a.new {position:relative;}
+a.new:before {
+    content: 'New!';
+    font-size:8px;
+    display: block;
+    line-height:13px;
+    height: 11px;
+    color:white;
+    text-align: center;
+    font-weight: bold;
+    width: 40px;
+    background:#000;
+    position: absolute;
+    border-radius: 3px 3px 0 0;
+    top:-11px;
+    right:0px;
+    background-image: linear-gradient(#000000, #e4361d);
+    border-color:#fff;
+    border-style:groove;
+    border-width: 1px 1px 0 1px;
+}
+
+/* Owner dashboard title & buttons */
+.resident h1 {color:#454348}
+.resident h1 .button {color:#E4361D;}
+.resident h1 .button:hover {color:#454348;}
+
+/* Table Header Buttons */
+h2 .button,.DTTT_container button.DTTT_button {font: 600 1em museo-sans-rounded, Helvetica, Arial, sans-serif;border-bottom: 1px solid #e4361d;color:#e4361d;text-decoration:none;padding-bottom:2px;}
+
+/* jQuery UI overrides */
+.ui-widget-content .ui-state-default.ui-button:hover {background:#454348}
+/*.ui-state-hover, .ui-widget-content .ui-state-hover, .ui-widget-header .ui-state-hover, .ui-state-focus, .ui-widget-content .ui-state-focus, .ui-widget-header .ui-state-focus {background:#454348}*/
+.ui-widget-content .ui-state-default.ui-button {background:#E4361D;color:#fff;}
+.ui-widget-content .ui-state-default.ui-button:focus {outline:none;}
+body .ui-dialog.ui-widget-content {border-width:0;}

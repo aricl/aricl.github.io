@@ -1,0 +1,1080 @@
+/*jshint unused:false,jquery:true*/
+
+/*global base_url:true, head:true, TableTools:true*/
+
+/**
+ * jquery.Table
+ *
+ * Defines client-side behaviour for Table objects
+ *
+ * @author Robert Corley
+ *
+ */
+function addCommas(nStr) {
+    "use strict";
+    nStr += '';
+    var x = nStr.split('.');
+    var x1 = x[0];
+    var x2 = x.length > 1 ? '.' + x[1] : '';
+    var rgx = /(\d+)(\d{3})/;
+
+    while (rgx.test(x1)) {
+        x1 = x1.replace(rgx, '$1' + ',' + '$2');
+    }
+    return x1 + x2;
+}
+
+;(function ($) {
+    "use strict";
+    var methods = {
+
+        /**
+         * Constructor
+         *
+         * Setup everything required to render the dataTables table.
+         *
+         */
+        init: function () {
+
+            // Save id of table
+            var id = $(this).attr('id');
+            var self = this;
+
+            // See if a DataTables object has already been initialized on the
+            // element in the wrapped set, if so return it
+            if ($.fn.DataTable.fnIsDataTable($(this)[0])) {
+                return window[$(this).eq(0).attr('id')];
+
+                // If first element in the wrapped set isn't a table then try and find a
+                // table which has a DataTables object associated with it inside that element
+                // and return that object
+            } else {
+                var table_object;
+
+                $(this).filter('table').each(function () {
+                    if ($.fn.DataTable.fnIsDataTable($(this)[0])) {
+                        table_object = $(this).eq(0).dataTable();
+                    }
+                });
+
+                if (table_object === undefined) {
+
+                    $(this).find('table').each(function () {
+                        if ($.fn.DataTable.fnIsDataTable($(this)[0])) {
+                            table_object = $(this).eq(0).dataTable();
+                        }
+                    });
+                }
+
+                if (table_object !== undefined) {
+                    return table_object;
+                }
+            }
+
+            // Otherwise initialize DataTables
+
+            // Get options
+            var options;
+            if (arguments[0] !== undefined) {
+                options = arguments[0];
+                $(self).data('options', options);
+            } else if ($(self).data('options')) {
+                options = $(self).data('options');
+            } else {
+                return null;
+            }
+
+            // Message to display when there are no records
+            /*if ( ! options.ajax_source) {
+                if ( ! options.zero_records_message) {
+                    options.zero_records_message = 'There are currently no records to display in this table';
+                }
+            } else {
+                options.zero_records_message = '';
+            }*/
+
+
+            var already_clicked = [];
+
+            // Setup options for dataTables
+            var dataTableOptions = {
+                "iDisplayLength": options.display_length,
+                "sAjaxSource": options.ajax_source,
+                "bDeferRender": !options.ajax_source ? false : true,
+                "bPaginate": !options.ajax_source ? false : true,
+                "bScrollInfinite": !options.ajax_source ? false : true,
+                "aaSorting": options.sort,
+                "dom": "Bi",
+                "paging": false,
+                "bProcessing": true,
+                rowGroup: !options.group_by ? false : {
+                    dataSrc: options.group_by
+                },
+                "buttons" : [
+                    'excel'
+                ],
+                "select": true,
+                "bStateSave": options.state_save,
+                "fnStateSave": function (oSettings, oData) {
+                    localStorage.setItem('DataTables_' + window.location.pathname, JSON.stringify(oData));
+                },
+                "fnStateLoad": function (oSettings) {
+                    return JSON.parse(localStorage.getItem('DataTables_' + window.location.pathname));
+                },
+                "oLanguage": {"sEmptyTable": options.zero_records_message},
+                "bLengthChange": false,
+                "bSortCellsTop": true,
+                //"sScrollY": scroll + 'px',
+                //"sScrollX": true,
+                "bAutoWidth": false,
+                "aoColumns": options.aoColumns,
+                "fnRowCallback": function (nRow, aData, iDisplayIndex, iDisplayIndexFull) {
+
+                    // Add conditional classes
+                    if (options.conditional_classes) {
+                        $.each(options.conditional_classes, function (index, condition_params) {
+
+                            // Check regex condition
+                            if (condition_params.condition[0] == '/') {
+
+                                // Get regex from string
+                                var flags = condition_params.condition.replace(/.*\/([gimy]*)$/, '$1');
+                                var pattern = condition_params.condition.replace(new RegExp('^/(.*?)/' + flags + '$'), '$1');
+                                var regex = new RegExp(pattern, flags);
+
+                                // Check condition
+                                if (String(aData[condition_params.col_index]).match(regex)) {
+                                    $(nRow).addClass(condition_params['class']);
+                                }
+                                // Check normal condition
+                            } else if (condition_params.condition[0] != '/'
+                                && String(aData[condition_params.col_index]) === String(condition_params.condition)) {
+                                $(nRow).addClass(condition_params['class']);
+                            }
+                        });
+                    }
+
+                    // Add HTML5 data- attributes to cells
+                    var oTable = this;
+                    var aoColumns = this.dataTable().fnSettings().aoColumns;
+                    $('td', nRow).each(function (i, element) {
+                        var n = oTable.fnVisibleToColumnIndex(i);
+                        var aDataAttributes = aoColumns[n].aDataAttributes;
+                        for (var name in aDataAttributes) {
+                            element.setAttribute("data-" + name, aDataAttributes[name]);
+                        }
+                    });
+                },
+                "fnDrawCallback": function (oSettings) {
+                    //
+                    // // Trigger custom event
+                    // $(document).trigger('dataTablesOnDraw');
+                    // $(this).trigger('datatables.onDraw');
+                    //
+                    // // Fire click event for 'click_action_on_load' links
+                    // $.each(options.onload_click_selectors, function (i, selector) {
+                    //     if (!already_clicked[selector] && $(selector).length !== 0) {
+                    //         $(selector).click();
+                    //         already_clicked[selector] = true;
+                    //     }
+                    // });
+                    //
+                    // // Scroll to certain row on load
+                    // if (options.scroll_to && $(options.scroll_to).prev().length) {
+                    //     $('div#' + id + '_wrapper div.dataTables_scrollBody').scrollTo(options.scroll_to);
+                    // }
+                    //
+                    // // Row grouping
+                    //
+                    // if (oSettings.aiDisplay.length == 0 || options.group_by === false) {
+                    //     return;
+                    // }
+
+                    // Find credit and debit columns
+                    // var oTable = $('#' + id).parent().Table();
+                    // var debitIndex = oTable.fnVisibleToColumnIndex($('#' + id).parent().prev().find('th:contains("Debit")').index());
+                    // var creditIndex = oTable.fnVisibleToColumnIndex($('#' + id).parent().prev().find('th:contains("Credit")').index());
+                    //
+                    // var nTrs = $('#' + id + ' tbody tr');
+                    // var iColspan = nTrs[0].getElementsByTagName('td').length;
+                    // var sLastGroup = oSettings.aoData[oSettings.aiDisplay[oSettings._iDisplayStart + nTrs.length - 1]]._aData[options.group_by];
+                    // var total = 0;
+                    // for (var i = nTrs.length - 1; i >= -1; i--) {
+                    //     if (i >= 0) {
+                    //         var iDisplayIndex = oSettings._iDisplayStart + i;
+                    //         var sGroup = oSettings.aoData[oSettings.aiDisplay[iDisplayIndex]]._aData[options.group_by];
+                    //
+                    //         var credit = parseFloat(oSettings.aoData[oSettings.aiDisplay[iDisplayIndex]]._aData[creditIndex].replace(/,/, ''));
+                    //         var debit = parseFloat(oSettings.aoData[oSettings.aiDisplay[iDisplayIndex]]._aData[debitIndex].replace(/,/, ''));
+                    //         credit = isNaN(credit) ? 0 : credit;
+                    //         debit = isNaN(debit) ? 0 : debit;
+                    //     } else {
+                    //         sGroup = '';
+                    //     }
+                    //
+                    //     var sGroup = sGroup;
+                    //     if (sGroup != sLastGroup) {
+                    //         var nGroup = document.createElement('tr');
+                    //         var nCell = document.createElement('td');
+                    //         nCell.colSpan = iColspan;
+                    //         nCell.className = "group";
+                    //         nCell.innerHTML = sLastGroup + '<br><span>Total: &pound;' + Math.round(100 * (total)) / 100;
+                    //         nGroup.appendChild(nCell);
+                    //
+                    //         if (i >= 0) {
+                    //             nTrs[i].parentNode.insertBefore(nGroup, nTrs[i].nextSibling);
+                    //         } else {
+                    //             nTrs[0].parentNode.insertBefore(nGroup, nTrs[0]);
+                    //         }
+                    //
+                    //         //nTrs[i].parentNode.insertBefore( nGroup, nTrs[i] );
+                    //         sLastGroup = sGroup;
+                    //
+                    //         total = 0;
+                    //     }
+                    //     total += debit - credit;
+                    // }
+                },
+                "fnInitComplete": function (oSettings) {
+                    for (var i = 0; i < oSettings.aoPreSearchCols.length; i++) {
+                        if (oSettings.aoPreSearchCols[i].sSearch.length > 0) {
+                            var oTable = $('#' + id).parent().Table();
+                            var num = oTable.fnColumnIndexToVisible(i);
+                            $('#' + id).parent().prev().find('tr.filters th:eq(' + num + ') input').val(oSettings.aoPreSearchCols[i].sSearch);
+                        }
+                    }
+
+                    //Added this to handle the show/hide of TotalColumns row after data table is fully loaded
+                    var show_total_enabled = [];
+                    for (var i = 0; i < oSettings.aoColumns.length; i++) {
+                        if (oSettings.aoColumns[i].bShowTotal === true) {
+                            show_total_enabled.push(i);
+                        }
+                    }
+
+                    // var top = parseInt($('div.dataTables_scrollBody').css('top').replace(/[^-\d\.]/g, ''));
+                    // var height = parseInt($('div.dataTables_scrollBody').css('height').replace(/[^-\d\.]/g, ''));
+                    //
+                    // if(show_total_enabled.length === 0) {
+                    //     $('#' + id).parent().prev().find('tr.column-totals-row').remove();
+                    // } else {
+                    //     $('div.dataTables_scrollBody')
+                    //         .css('top', top + 20 + 'px')
+                    //         .css('height', height - 20 + 'px');
+                    // }
+                },
+                // //"aoColumnDefs": [{ "bVisible": false, "aTargets": [ 0 ] }],
+                // // "aaSortingFixed": options.group_by !== false ? [[options.group_by, 'asc']] : null, // Fix sorting on the group by column
+                "fnInfoCallback": function (oSettings, iStart, iEnd, iMax, iTotal, sPre) {
+                    // Create 'showing x to x of x string
+                    var showing = 'Showing ' + iStart + ' to ' + iEnd + ' of ' + iTotal + ' rows';
+
+                    // Get selected rows and generate selected string
+                    var oTableTools = $('#' + id).data('oTableTools');
+
+                    var selected;
+                    if (oTableTools !== undefined) {
+                        var iSelected = oTableTools.fnGetSelectedData().length;
+                        selected = iSelected > 0 ? ' | <strong>' + iSelected + ' rows selected</strong>' : ' | 0 rows selected';
+                    } else {
+                        selected = '';
+                    }
+
+                    // Generate info and add to content box
+                    var info = showing + selected;
+                    $('#' + id).closest('.content-box').children('.dataTables_Info').remove();
+                    $('#' + id).closest('.content-box').append($('<div class="dataTables_Info">' + info + '</div>'));
+
+                    var show_total_enabled = [];
+                    for (var i = 0; i < oSettings.aoColumns.length; i++) {
+                        if (oSettings.aoColumns[i].bShowTotal === true) {
+                            show_total_enabled.push(i);
+                        }
+                    }
+
+                    if(show_total_enabled.length === 0) {
+                        $('#' + id).find('tr.column-totals-row').remove();
+                    }
+
+                    return info;
+                },
+                "fnFooterCallback": function (nRow, aaData, iStart, iEnd, aiDisplay) {
+                    var iTotal = 0;
+                    var total =[];
+                    var columnIndexesVisible = [];
+                    var columnIndexesOriginal = [];
+                    var columnTypes = [];
+                    var columnTotalsRow = $(this).find('thead tr.column-totals-row');
+
+                    // Remove the formatting to get integer data for summation
+                    var intVal = function ( i ) {
+                        return typeof i === 'string' ?
+                            i.replace(/[\$,]/g, '')*1 :
+                            typeof i === 'number' ?
+                                i : 0;
+                    };
+
+                    var toArray = function Arr2object(keys, vals) {
+                        return keys.reduce(
+                            function(prev, val, i) {
+                                prev[val] = vals[i];
+                                return prev;
+                            }, {}
+                        );
+                    };
+
+                    var totalWithCommas = function numberWithCommas(number) {
+                        var parts = number.toString().split(".");
+                        parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+                        return parts.join(".");
+                    };
+
+                    //Determine which column is enabled to show totals
+                    if (columnTotalsRow.length > 0) {
+                        for (var i = 0; i < dataTableOptions.aoColumns.length; i++) {
+                            if (dataTableOptions.aoColumns[i].bShowTotal === true) {
+                                var oTable = $('#' + id).parent().Table();
+                                //To find the column actual indexes
+                                columnIndexesVisible.push(oTable.fnColumnIndexToVisible(i));
+                                //To find the index they are visible in DOM
+                                columnIndexesOriginal.push(i);
+                                columnTypes.push(dataTableOptions.aoColumns[i].sType);
+                            }
+                        }
+                    }
+
+                    columnIndexesOriginal = toArray(columnIndexesOriginal, columnTypes);
+
+                    //Loop through the data and find totals
+                    if (Object.keys(columnIndexesOriginal).length > 0) {
+                        for (var key in columnIndexesOriginal) {
+                            for (var i = 0; i < aiDisplay.length; i++) {
+                                // Added thi to handle the column values with hyphens '-'
+                                if (aaData[aiDisplay[i]][key] != '-' && aaData[aiDisplay[i]][key] != 'N/A') {
+                                    iTotal += intVal(aaData[aiDisplay[i]][key]);
+                                }
+                            }
+                            var tempTotal;
+
+                            if (columnIndexesOriginal[key] == 'currency') {
+                                tempTotal = totalWithCommas(iTotal.toFixed(2));
+                            } else {
+                                tempTotal = iTotal;
+                            }
+
+                            iTotal = 0;
+                            total.push(tempTotal);
+                        }
+                    }
+
+                    var totalToDisplay = toArray(columnIndexesVisible, total);
+                    var columnIndexesWithColumnTypes = toArray(columnIndexesVisible, columnTypes);
+
+                    // Add a new row for Column totals as a first row and append totals to it
+                    var cols = $(this).find('tr.headings').children().length;
+                    var html = '<tr class="column-totals-row">';
+                    for (var i = 1; i <= cols; i++) {
+                        html += '<th class="column-totals"></th>';
+                    }
+                    html += '</tr>';
+                    if (columnTotalsRow.length) {
+                        // replace row with new row
+                        $(this).find('thead tr.column-totals-row').remove();
+                        var nCells = $(html).appendTo($(this).find('thead')).children();
+                    } else {
+                        // append
+                        nCells = $(html).appendTo($(this).find('thead')).children();
+                    }
+
+                    if (columnIndexesVisible.length > 0) {
+                        nCells[0].innerHTML = 'Total:';
+                        for(var k in totalToDisplay) {
+                            nCells[k].innerHTML = totalToDisplay[k];
+                            if (columnIndexesWithColumnTypes[k] == 'currency') {
+                                nCells[k].className += ' r';
+                            }
+                        }
+                    }
+                }
+            };
+
+            // Add server side options
+            dataTableOptions = $.fn.Table('server_side_options', options, dataTableOptions);
+
+            // Initialize!
+            var table = $(this).DataTable(dataTableOptions);
+            // Move the additional table buttons from below the table heading into the table heading
+            table.buttons().container().appendTo('#' + id + '_heading');
+
+            // Get the old jquery datatables object. $(this).DataTable returns the new datables 1.10 API object
+            var oTable = $(this).dataTable();
+            if (oTable.length !== 0) {
+                oTable.Table('setup_filters', options, table)
+                    //.Table('table_resize', dataTableOptions)
+                    // .Table('make_editable', options)
+                    .Table('setup_table_tools', options)
+                ;
+
+                $('tr.content td:first').height($('tr.content td:first').height());
+            }
+
+            var editor = new $.fn.dataTable.Editor( {
+                ajax: {
+                    edit: {
+                        type: 'POST',
+                        url:  options.editUrl
+                    },
+                },
+                table: "#table_cbd06cec4",
+                fields: [
+                  {
+                    label: "Flats",
+                    name: "1_"
+                  },
+                    {
+                        label: "Houses",
+                        name: "2_"
+                    }
+                ]
+            } );
+
+            // Activate an inline edit on click of a table cell
+            $('#table_cbd06cec4').on( 'click', 'tbody td:not(:first-child)', function (e) {
+                editor.inline(this);
+            } );
+
+            //var oSettings = oTable.fnSettings();
+            return oTable;
+        },
+
+        // ------------------------------------------------------------------------
+
+        /**
+         * Table Resize
+         *
+         * Set intial scrol height for table body and attach event handler to
+         * window resize event to recalcualte height and column widths on window
+         * resize.
+         *
+         */
+        table_resize: function (oSettings) {
+
+            var id = $(this).attr('id');
+            var self = this;
+            var offset;
+            if ($(self).closest('div.ui-dialog-content').length) {
+                offset = 17;
+            } else {
+                offset = 0;
+            }
+
+            var s = self.fnSettings();
+            var tw = s.nTableWrapper;
+            $('div.dataTables_scrollBody', tw)
+                .css('top', $('div.dataTables_scrollHead', tw).height());
+
+            if (head.browser.ie && parseFloat(head.browser.version) < 8) {
+                $('div.dataTables_scrollBody', tw)
+                    .css('top', 0)
+                    .css('bottom', 0);
+            }
+            var bufferTo = null;
+            $(window).resize(function () {
+
+                if (bufferTo) {
+                    clearTimeout(bufferTo);
+                }
+
+                // Set timeout to 10 seconds for IE 8
+                var timeout;
+                if (head.browser.ie && Number(parseFloat(head.browser.version)) === 8) {
+                    timeout = 2000;
+                } else {
+                    timeout = 100;
+                }
+
+                bufferTo = setTimeout(function () {
+
+                    var settings = self.fnSettings();
+                    var table_wrapper = settings.nTableWrapper;
+
+                    // Calculate height
+                    var table_head = $('div.dataTables_scrollHead', table_wrapper).offset();
+                    $(table_wrapper).parentsUntil('div.content-box').parent().append($('<span class="offset-span" style="position:absolute;bottom:0px;visibility:hidden;"></span>'));
+                    //console.log($(table_wrapper).parentsUntil('div.content-box').parent().children());
+                    var table_info = $('span.offset-span', $(table_wrapper).parentsUntil('div.content-box').parent()).offset();
+                    var scroll = table_info.top - table_head.top - $('div.dataTables_scrollHead', table_wrapper).height() - 14;
+
+                    // Fix for IE
+                    if (head.browser.ie && parseFloat(head.browser.version) < 8) {
+                        scroll = scroll - 1;
+                    }
+
+                    // Set height
+                    $('div.dataTables_scrollBody', table_wrapper)
+                        .height(scroll + 'px')
+                        .css('top', $('div.dataTables_scrollHead', table_wrapper).height() + offset);
+
+                    // Another fix for IE
+                    if (head.browser.ie && parseFloat(head.browser.version) < 8) {
+                        $('div.dataTables_scrollBody', table_wrapper)
+                            .css('top', 0)
+                            .css('overflow-x', 'hidden');
+
+                    }
+
+                    // Adjust column widths
+                    self.fnAdjustColumnSizing(false);
+
+                }, timeout);
+            });
+
+            $(window).trigger('resize');
+
+            return self;
+        },
+
+        // ------------------------------------------------------------------------
+
+        /**
+         * Server side
+         *
+         * Setup server side options for dataTable.
+         *
+         */
+        server_side_options: function (options, dataTableOptions) {
+            if (options.server_side === true) {
+                var serverSideOptions = {
+                    bServerSide: true,
+                    fnServerData: function (sSource, aoData, fnCallback) {
+                        $.ajax({
+                            'dataType': 'json',
+                            'type': 'POST',
+                            'url': sSource,
+                            'data': aoData,
+                            'success': fnCallback
+                        });
+                    }
+                };
+                $.extend(dataTableOptions, serverSideOptions);
+            }
+            return dataTableOptions;
+        },
+
+        // --------------------------------------------------------------------
+
+        /**
+         * Setup filters
+         *
+         * Applies keyup handler to input fields to handle the table filtering.
+         *
+         */
+        setup_filters: function (options, table) {
+            var oTable = this;
+
+            // Done according to https://datatables.net/extensions/colreorder/examples/initialisation/col_filter.html
+            // with some small changes to make it work with hidden columns, see https://datatables.net/reference/api/column.index()
+
+            $('tr.filters th', oTable).each( function (i) {
+                var title = $('#example thead th').eq( $(this).index() ).text();
+                $(this).html( '<input type="text" placeholder=" << filter >> " class="search_init Table-filter" data-index="'+i+'" />' );
+            } );
+
+            oTable.on( 'keyup', 'thead input', function () {
+                var index = $(this).parent().index();
+                console.log($(this).data('index'));
+                console.log(index);
+                index = table.column.index( 'fromVisible', index );
+                table
+                    .column( index )
+                    .search( this.value )
+                    .draw();
+            } );
+
+            return oTable;
+        },
+
+        // ------------------------------------------------------------------------
+
+        /**
+         * Make Editable
+         *
+         * Applies the DataTables Editable Plugin to the DataTable object passed
+         * as 'this'.
+         *
+         */
+        make_editable: function (options) {
+
+            var oTable = this;
+
+            oTable.Table('editable_tab_next_cell', options);
+            if (options.editUrl) {
+                // Add loading icon
+                $(".buttons").prepend('<img src="' + window.base_url + 'assets/images/loadingt.gif" class="table-loading" />');
+
+                // Init datables.makeEditable plugin
+                oTable = oTable.makeEditable({
+                    sUpdateURL: options.editUrl,
+                    sEditorWidth: null,
+                    aoColumns: options.columnEditSettings,
+                    oEditableSettings: {
+                        placeholder: '',
+                        onblur: "submit"
+                    },
+                    ajaxoptions: {
+                        complete: function (jqXHR, textStatus) {
+                            alert("sf");
+                        }
+                    },
+                    fnOnEditing: function (input) {
+                        // Process decimal datatype before ajax request
+                        var td = input.parent().parent();
+                        if (td.hasClass('decimal')) {
+
+                            // Get precision
+                            var precision_arr = td.attr('class').match(/precision-(\d+)/);
+                            var precision = precision_arr[1];
+
+                            input.val($('<div>' + input.val() + '</div>').text());
+
+                            if ($.trim(input.val()) !== '') {
+                                var number_parts = input.val().split('.');
+
+                                if (number_parts[1] !== undefined && number_parts[1].length > precision) {
+                                    var new_number = number_parts[0] + '.' + Math.round((number_parts[1] / Math.pow(10, number_parts[1].length - precision)));
+                                    input.val(new_number);
+                                }
+                            } else {
+                                input.val('0.' + Array(Number(precision) + 1).join(0));
+                            }
+                        }
+
+                        // Process currency datatype before ajax request
+                        if (td.attr('data-datatype') == 'currency') {
+                            input.val(Number(input.val().replace(/,/g, '')).format('0.00'));
+                        }
+
+                        oTable.find('.table-loading').show();
+
+                        return true;
+                    },
+                    fnOnEdited: function (status, old_value, new_value, row, col, index) {
+                        if (status === 'success') {
+                            $('table').trigger('editable-edited', [old_value, new_value, row, col, index]);
+                        }
+
+                        oTable.find('.table-loading').hide();
+                        setTimeout(function () {
+                            $('table').trigger('as');
+                            $('table').unbind('as');
+                        }, 0);
+                        /*if (status !== 'success') {
+                            console.log($.parseJSON(new_value));
+                            $.fn.Util('show_message',msg);
+                        }*/
+
+                    },
+                    fnShowError: function (message, action) {
+                        switch (action) {
+                            case "update":
+                                //jAlert(message, "Update failed");
+                                alert("Update failed");
+                                break;
+                            case "delete":
+                                //jAlert(message, "Delete failed");
+                                break;
+                            case "add":
+                                //$("#lblAddError").html(message);
+                                //$("#lblAddError").show();
+                                break;
+                        }
+                    }
+                });
+            }
+            return oTable;
+        },
+
+        // ------------------------------------------------------------------------
+
+        /**
+         * Editable Tab Next Cell
+         *
+         * When editing a cell on an editable table this applies a handler to
+         * the tab key to edit the next cell.
+         *
+         */
+        editable_tab_next_cell: function (options) {
+
+            var oTable = this;
+
+            // Find next editable cell in row
+            function fnNextInput(oTds, oInput) {
+
+                // Loop through cells
+                oTds.each(function () {
+
+                    var oTd = $(this);
+
+                    // Get column position of cell
+                    var iColPos = oTable.fnGetPosition(this)[1];
+
+                    // If cell is editable then click and focus on input
+                    if (options.columnEditSettings[iColPos] !== null) {
+                        //$(this).find('input,select,textarea').unbind('blur');
+                        oInput.blur();
+                        oTd.closest('table').bind('as', function () {
+                            oTd.click();
+                        });
+
+                        setTimeout(function () {
+
+                        }, 150);
+                        //.find('input,select,textarea').focus();
+                        /*setTimeout( function () {
+                        $(this).find('input,select,textarea').focus();
+                        }, 2000 );*/
+                        return false;
+                    }
+
+                    // If end of row, go to next row
+                    if (Number(iColPos) === options.columnEditSettings.length - 1) {
+                        fnNextInput($(this).closest('tr').next().children());
+                        return false;
+                    }
+                });
+            }
+
+            oTable.on('keydown', 'input,select,textarea', function (e) {
+
+                // If tab key
+                if (e.keyCode === 9) {
+                    var oInput = $(this);
+
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    // Call fnNextInput with all the cells in the row to the right of the current cell
+                    fnNextInput(oInput.closest('td').nextAll(), oInput);
+                }
+            });
+
+            return oTable;
+        },
+
+        // ------------------------------------------------------------------------
+
+        /**
+         * Setup TableTools Plugin
+         *
+         * Initlize the TableTools plugin for TableTools, handles the row selection
+         * and table-wide buttons
+         */
+        setup_table_tools: function (options, id) {
+
+            var oTable = this;
+
+            // Custom button to extract ids from selected rows and POST to sFormAction
+            TableTools.BUTTONS.withSelected = $.extend(true, TableTools.buttonBase, {
+                "sNewLine": "<br>",
+                "sButtonText": "With Selected", // default, change when initiating
+                "sFormAction": "", // default, change when initiating
+                "bNewWindow": false,
+                "sDiv": "",
+                "fnClick": function (nButton, oConfig) {
+
+                    // Get selected record and extract ids
+                    var selectedRowData = oTableTools.fnGetSelectedData();
+                    var ids = '';
+                    $.each(selectedRowData, function (index, val) {
+                        ids = ids + val[1] + ',';
+                    });
+                    if (ids !== '') {
+                        ids = ids.substr(0, ids.length - 1);
+                    }
+
+                    // Generate <form> options
+                    var form_options = {
+                        target: (oConfig.bNewWindow === true) ? '_blank' : '_self',
+                        action: base_url + oConfig.sFormAction,
+                        method: 'post'
+                    };
+
+                    // Append form to page, add ids input and submit
+                    $('<form>', form_options)
+                        .append($('<input type="hidden" name="ids" value="' + ids + '" />'))
+                        .appendTo('body')
+                        .submit();
+                }
+            });
+
+            // Setup stuff for selectable column
+            var PreRowSelect;
+            var sRowSelect;
+            if (Number(options.selectable) === 1) {
+                // Create preRowSelect funtion to only allow selection click handler to work
+                // on the first column rather than whole row
+                PreRowSelect = function (e) {
+                    if (e.shiftKey === true) {
+                        $(e.target).closest('tr').prevUntil('tr.DTTT_selected').each(function () {
+                            $(this).children(":first").click();
+                        });
+                    }
+
+                    // Find the index of e.target in the parent <tr>, if this isn't
+                    // 0 (i.e. if it isn't the first cell) then don't allow selection
+                    if ($('td', e.target.parentNode).index(e.target) !== 0) {
+                        return false;
+                    }
+                    return true;
+                };
+                sRowSelect = "multi";
+            } else {
+                PreRowSelect = null;
+                sRowSelect = "none";
+            }
+
+            // Setup TableTools
+            var oTableTools = new TableTools(oTable, {
+                "sRowSelect": sRowSelect,
+                "bSelectedOnly": true,
+                "sSwfPath": "/assets/scripts/plugins/dataTables/copy_csv_xls.swf",
+                "aButtons": [],
+                "fnPreRowSelect": PreRowSelect
+            });
+
+            // Add buttons to DOM
+            oTable.closest('.content-box').children('h2').children('.buttons').first().prepend(oTableTools.dom.container);
+
+            // Trigger click event on <td> when the span with the tick icon is clicked
+            $(document).on('click', 'td span.selectable', function () {
+                $(this).parent().click();
+                oTable.fnDraw();
+            });
+
+            // Add click handler for select all tickbox in filters tr
+            oTable.parent().prev().find('tr.filters th span.selectable').on('click', function () {
+                if ($(this).hasClass('selected')) {
+                    $(this).removeClass('selected');
+                    oTableTools.fnSelectNone();
+                    oTable.fnDraw();
+                }
+                else {
+                    $(this).addClass('selected');
+                    //oTableTools.fnSelect( oTable.$('tr',  {"filter":"applied"}) );
+                    oTableTools.fnSelectAll(true);
+                    oTable.fnDraw();
+                }
+            });
+
+            $(oTable[0]).data('oTableTools', oTableTools);
+
+            return oTableTools;
+
+        },
+
+        // ------------------------------------------------------------------------
+
+        /**
+         * Next Cell Vertically
+         *
+         * Given a jquery wrapped set containing a table cell this method returns
+         * a wrapped set containing the next cell vertically in the table.
+         *
+         */
+        next_cell_vertically: function () {
+
+            //find position of this cell..
+            var $row = this.parent();
+            var htmlCell = this[0];
+            var cellIndex = $.inArray(htmlCell, $row[0].cells);
+            var table = $row.parent()[0];
+            var rowIndex = $.inArray($row[0], table.rows);
+
+            //get the next cell vertically..
+            return (rowIndex < table.rows.length - 1) ?
+                $(table.rows[rowIndex + 1].cells[cellIndex]) : undefined;
+
+        },
+
+        // ------------------------------------------------------------------------
+
+        /**
+         * Column Total
+         *
+         * Calculate the total for the given column.
+         *
+         */
+        column_total: function (col_index) {
+            col_index++;
+            var total = 0;
+            $('td:nth-col(' + col_index + ')', this).each(function () {
+                var num = $(this).text().replace(/,/, '');
+                if (num) {
+                    if (num.match(/\d+?(\.\d+)?/)) {
+                        total += Number(num.match(/\d+?(\.\d+)?/)[0]);
+                    }
+                }
+            });
+            return total;
+        },
+
+        // ------------------------------------------------------------------------
+
+        /**
+         * Highlight Next
+         *
+         * Finds the selected row, removes all the 'selected' class from each cell
+         * and adds to the cells in the next row.
+         *
+         */
+        highlight_next: function () {
+
+            var table = $($(this).find('.dataTables_scrollBody').children()[0]);
+            if (!table.length) {
+                table = $($(document).find('.dataTables_scrollBody').children()[0]);
+            }
+            table
+                .find('td.selected')
+                .siblings()
+                .removeClass('selected')
+                .parent()
+                .next()
+                .children()
+                .addClass('selected');
+        },
+
+        // ------------------------------------------------------------------------
+
+        /**
+         * Highlight
+         *
+         * Given the value for the row column this method will add a selected class
+         * that row and remove from any others.
+         *
+         */
+        highlight: function (row_id) {
+            var tr = $(this).Table('get_tr_from_id', row_id);
+            var table = tr.closest('.dataTables_scrollBody');
+            $(table).find('td.selected').removeClass('selected');
+            $(tr).children().addClass('selected');
+        },
+
+        // ------------------------------------------------------------------------
+
+        /**
+         * Scroll To Row
+         *
+         * Given a row id this method will scroll to that row.
+         *
+         */
+        scroll_to_row: function (row_id) {
+            var row = $(this).Table('get_tr_from_id', row_id);
+            if (row) {
+                $(row).closest('.dataTables_scrollBody').scrollTo(row);
+            }
+        },
+
+        // ------------------------------------------------------------------------
+
+        /**
+         * Get <tr> from id
+         *
+         * Given the value of the ID column for a row this method will return a
+         * jQuery wrapped set of the <tr> node.
+         *
+         * @param   int[]
+         */
+        get_tr_from_id: function (id) {
+            var table = $(this).find('.dataTables_scrollBody').Table();
+            if (!table) {
+                table = $(document).find('.dataTables_scrollBody').Table();
+            }
+            var settings = table.fnSettings();
+            var idColIndex, tr;
+
+            if (settings.sAjaxSource) {
+                $.each(settings.aoColumns, function (i, col) {
+                    if (col.sName == 'id') {
+                        idColIndex = i;
+                        return false;
+                    }
+                });
+
+                $.each(settings.aoData, function (i, row) {
+                    if (row._aData[idColIndex] == id) {
+                        tr = row.nTr;
+                        return false;
+                    }
+                });
+            } else {
+                tr = table.find('tr[id$="-' + id + '"]');
+            }
+
+            return tr;
+        },
+
+        // ------------------------------------------------------------------------
+
+        /**
+         * Row Total
+         *
+         * Calculate the total for the given row.
+         *
+         * @param   int[]    exclude_columns     array of column indexes to
+         *                                          exclude, counting from 0.
+         */
+        row_total: function (exclude_columns) {
+            var tds = $(this).children();
+            var total = 0;
+            tds.each(function (i) {
+                if ($.inArray(i, exclude_columns) === -1) {
+                    var num = $(this).text().replace(/,/g, '');
+                    if (num) {
+                        if (num.match(/([-+]?(\d*[.])?\d+)/)) {
+                            total += Number(num.match(/([-+]?(\d*[.])?\d+)/)[1]);
+                        }
+                    }
+                }
+            });
+            return total;
+        },
+
+        // ------------------------------------------------------------------------
+
+        /**
+         * Get Data Attributes
+         *
+         * Returns the HTML5 data- attributes for a cell as an object. The attributes
+         * are taken from the <tr> element and the <th> element for the row and
+         * column.
+         *
+         * This is useful because you can, for example, specify database IDs for the
+         * rows/columns in editable tables.
+         *
+         * @param   none
+         * @return  Object
+         */
+        get_data_attributes: function () {
+            var td = $(this);
+            var tr = td.parent();
+            var th = td.closest('table').find('thead > tr th:eq(' + td.index() + ')');
+
+            return $.extend(tr.data(), th.data());
+        }
+    };
+
+    // ----------------------------------------------------------------------
+
+    /**
+     * Setup method handler
+     */
+    $.fn.Table = function (method) {
+        if (methods[method]) {
+            return methods[method].apply(this, Array.prototype.slice.call(arguments, 1));
+        } else if (typeof method === 'object' || !method) {
+            return methods.init.apply(this, arguments);
+        } else {
+            $.error('Method ' + method + ' does not exist on jQuery.Table');
+        }
+    };
+})(jQuery);

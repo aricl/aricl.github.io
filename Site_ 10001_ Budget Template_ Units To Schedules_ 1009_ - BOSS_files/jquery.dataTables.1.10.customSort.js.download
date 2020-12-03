@@ -1,0 +1,308 @@
+/**
+ * Sorting Functions: address
+ *
+ * Functions for sorting address data type. For example:-
+ *
+ * 1 Tullip Terrace
+ * 3 Tullip Terrace
+ * 5 Acorn Road
+ *
+ * for ascending, would be sorted to:-
+ *
+ * 5 Acorn Road
+ * 1 Tullip Terrace
+ * 3 Tullip Terrace
+ *
+ * TODO: finish this off with all the other sorting functions from @see web/assets/app/jquery.dataTables.customSort.js this is the example used: https://datatables.net/plug-ins/sorting/numeric-comma, you simply need to drop the functions in the old version into this format
+ * TODO: for completeness we should probably include the autodetection functions from  web/assets/app/jquery.dataTables.customSort.js. These can be lifted as-is https://datatables.net/plug-ins/type-detection/numeric-comma. Although I might put them in a separate file this time!
+ */
+
+/**
+ * Automatic type detection: eu_date
+ *
+ * Matches: dd/mm/yyyy or dd.mm.yyyy (also matches 2 digit years and
+ * single digit months and days)
+ *
+ */
+jQuery.fn.dataTableExt.aTypes.unshift(
+    function (value) {
+        let string = String(value);
+      //                                     ----------------- Hours -----------   ------ Mins ----       --------- Day ---------
+      if (string !== null && string.match(/^\s*((([0]?[0-9])|([1][0-9])|([2][0-4]))(:[0-5]?[0-9]){1,2})?\s*(0?[1-9]|[12][0-9]|3[01])[\/\.]((0?[1-9]|1[012])[\/\.](19|20|21|22)?\d\d)?\s*$/)) {
+          return 'eu_date';
+      }
+      return null;
+    }
+);
+
+jQuery.extend( jQuery.fn.dataTableExt.oSort, {
+    "address-asc": function (a, b) {
+        var address1 = a.replace(/\s?\d+ /, '').toLowerCase();
+        var num1 = a.match(/^\s*(\d+)/);
+        num1 = num1 == null ? 0 : Number(num1[0]);
+
+        var address2 = b.replace(/\s?\d+ /, '').toLowerCase();
+        var num2 = b.match(/^\s*(\d+)/);
+        num2 = num2 == null ? 0 : Number(num2[0]);
+
+        if (address1 > address2) {
+            return 1;
+        } else if (address1 < address2) {
+            return -1;
+        } else if (num1 > num2) {
+            return 1;
+        } else if (num1 < num2) {
+            return -1;
+        } else {
+            return 0;
+        }
+    },
+    "address-desc": function(a, b) {
+        var address1 = a.replace(/^\s?\d+? ?/, '');
+        var num1 = Number(a.match(/\s?(\d+) /));
+        if (num1[1] !== undefined) {
+            num1 = num1[1]
+        } else {
+            num1 = 0;
+        }
+
+        var address2 = b.replace(/^\s?\d+? ?/, '');
+        var num2 = Number(b.match(/\s?(\d+) /));
+        if (num1[1] !== undefined) {
+            num2 = num2[1]
+        } else {
+            num2 = 0;
+        }
+
+        if (address1 > address2) {
+            return -1;
+        } else if (address1 < address2) {
+            return 1;
+        } else if (num1 > num2) {
+            return -1;
+        } else if (num1 < num2) {
+            return 1;
+        } else {
+            return 0;
+        }
+    },
+    "currency-asc": function (a, b) {
+        return formattedNumberAscending(a, b);
+    },
+    "currency-desc": function (a, b) {
+        return formattedNumberDescending(a, b);
+    },
+    "date-asc": function (a, b) {
+        return dateAscending(a, b);
+    },
+    "date-desc": function (a, b) {
+        return dateDescending(a, b);
+    },
+    "eu_date-asc": function (a, b) {
+        return dateAscending(a, b);
+    },
+    "eu_date-desc": function (a, b) {
+        return dateDescending(a, b);
+    },
+    "formatted-num-asc": function (a, b) {
+        return formattedNumberAscending(a, b);
+    },
+    "formatted-num-desc": function (a, b) {
+        return formattedNumberDescending(a, b);
+    },
+    "natural-asc": function (a, b) {
+        return naturalSort(a, b);
+    },
+    "natural-desc": function (a, b) {
+        return naturalSort(a, b) * -1;
+    },
+} );
+
+function formattedNumberAscending(a, b) {
+    /* Remove any formatting */
+    let x = a.match(/\d/) ? a.replace(/[^\d\-\.]/g, "") : 0;
+    let y = b.match(/\d/) ? b.replace(/[^\d\-\.]/g, "") : 0;
+
+    /* Parse and return */
+    return parseFloat(x) - parseFloat(y);
+}
+
+function formattedNumberDescending(a, b) {
+    let x = a.match(/\d/) ? a.replace(/[^\d\-\.]/g, "") : 0;
+    let y = b.match(/\d/) ? b.replace(/[^\d\-\.]/g, "") : 0;
+
+    return parseFloat(y) - parseFloat(x);
+}
+
+function dateAscending(a, b) {
+    let x = calculate_date(a);
+    let y = calculate_date(b);
+    return ((x < y) ? -1 : ((x > y) ?  1 : 0));
+}
+
+function dateDescending(a, b) {
+    let x = calculate_date(a);
+    let y = calculate_date(b);
+    return ((x < y) ? 1 : ((x > y) ?  -1 : 0));
+}
+
+/**
+ * Sorting Functions: eu_date
+ *
+ * @author Robert Corley, Andy McMaster
+ *
+ * Modified version of 'UK date type detection' by Andy McMaster
+ * @link http://datatables.net/plug-ins/type-detection#functions
+ *
+ * Handles the following format of date and time:
+ *
+ *   [(h)h:(m)m{:(s)s}] (d)d/(m)m
+ *
+ * Hours must be 24 hour format. Everything inside brackets is
+ * optional and the date separator can be either / or .
+ *
+ * For Example, the following formats would be sorted correctly:-
+ *
+ *   04.09.12
+ *   4/9/2012
+ *   07:12:04 04.09.12
+ *   7:12 04/09/2012
+ *
+ */
+function calculate_date(date) {
+    date = new String(date);
+    var date_time = $.trim(date);
+    var date_time = date.split(' ');
+
+    if (date_time.length > 1) {
+        var date = date_time[1].replace(" ", "");
+        var time = date_time[0].replace(" ", "");
+    } else {
+        var date = date.replace(" ", "");
+        var time = null;
+    }
+
+    if (date.indexOf('.') > 0) {
+        /*date a, format dd.mn.(yyyy) ; (year is optional)*/
+        var eu_date = date.split('.');
+    } else {
+        /*date a, format dd/mn/(yyyy) ; (year is optional)*/
+        var eu_date = date.split('/');
+    }
+
+    /*time (optional)*/
+    if (time != null) {
+
+        time = time.split(':');
+
+        /*hour*/
+        if (time[0]) {
+            var hour = time[0];
+            if (hour.length == 1) {
+                hour = 0+hour;
+            }
+        } else {
+            var hour = 0;
+        }
+
+        /*min*/
+        if (time[1]) {
+            var min = time[1];
+            if (min.length == 1) {
+                min = 0+min;
+            }
+        } else {
+            var min = 0;
+        }
+
+
+
+        /*sec*/
+        if (time.length > 2) {
+            var sec = time[2];
+            if (sec.length == 1) {
+                sec = 0+sec;
+            }
+        } else {
+            var sec = '00';
+        }
+
+    }
+    else
+    {
+        var min = '00';
+        var sec = '00';
+        var hour = '00';
+    }
+
+
+    /*year (optional)*/
+    if (eu_date[2]) {
+        var year = eu_date[2];
+    } else {
+        var year = 0;
+    }
+
+    /*month*/
+    if (eu_date[1]) {
+        var month = eu_date[1];
+        if (month.length == 1) {
+            month = 0+month;
+        }
+    } else {
+        var month = 0;
+    }
+
+    /*day*/
+    if (eu_date[1]) {
+        var day = eu_date[0];
+        if (day.length == 1) {
+            day = 0+day;
+        }
+    } else {
+        var day = 0;
+    }
+    return (year + month + day + hour + min + sec ) * 1;
+}
+
+/*
+ * Natural Sort algorithm for Javascript - Version 0.6 - Released under MIT license
+ * Author: Jim Palmer (based on chunking idea from Dave Koelle)
+ * Contributors: Mike Grier (mgrier.com), Clint Priest, Kyle Adams, guillermo
+ */
+function naturalSort(a, b) {
+    var re = /(^-?[0-9]+(\.?[0-9]*)[df]?e?[0-9]?$|^0x[0-9a-f]+$|[0-9]+)/gi,
+      sre = /(^[ ]*|[ ]*$)/g,
+      dre = /(^([\w ]+,?[\w ]+)?[\w ]+,?[\w ]+\d+:\d+(:\d+)?[\w ]?|^\d{1,4}[\/\-]\d{1,4}[\/\-]\d{1,4}|^\w+, \w+ \d+, \d{4})/,
+      hre = /^0x[0-9a-f]+$/i,
+      ore = /^0/,
+      // convert all to strings and trim()
+      x = a.toString().replace(sre, '') || '',
+      y = b.toString().replace(sre, '') || '',
+      // chunk/tokenize
+      xN = x.replace(re, '\0$1\0').replace(/\0$/, '').replace(/^\0/, '').split('\0'),
+      yN = y.replace(re, '\0$1\0').replace(/\0$/, '').replace(/^\0/, '').split('\0'),
+      // numeric, hex or date detection
+      xD = parseInt(x.match(hre)) || (xN.length != 1 && x.match(dre) && Date.parse(x)),
+      yD = parseInt(y.match(hre)) || xD && y.match(dre) && Date.parse(y) || null;
+    // first try and sort Hex codes or Dates
+    if (yD)
+        if (xD < yD) return -1;
+        else if (xD > yD) return 1;
+    // natural sorting through split numeric strings and default strings
+    for (var cLoc = 0, numS = Math.max(xN.length, yN.length); cLoc < numS; cLoc++) {
+        // find floats not starting with '0', string or 0 if not defined (Clint Priest)
+        oFxNcL = !(xN[cLoc] || '').match(ore) && parseFloat(xN[cLoc]) || xN[cLoc] || 0;
+        oFyNcL = !(yN[cLoc] || '').match(ore) && parseFloat(yN[cLoc]) || yN[cLoc] || 0;
+        // handle numeric vs string comparison - number < string - (Kyle Adams)
+        if (isNaN(oFxNcL) !== isNaN(oFyNcL)) return (isNaN(oFxNcL)) ? 1 : -1;
+        // rely on string comparison if different types - i.e. '02' < 2 != '02' < '2'
+        else if (typeof oFxNcL !== typeof oFyNcL) {
+            oFxNcL += '';
+            oFyNcL += '';
+        }
+        if (oFxNcL < oFyNcL) return -1;
+        if (oFxNcL > oFyNcL) return 1;
+    }
+    return 0;
+}

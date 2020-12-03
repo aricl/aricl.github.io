@@ -1,0 +1,52 @@
+/**
+ * jquery.Date
+ *
+ * Behaviour for a date picker.
+ *
+ * @author Robert Corley
+ *
+ */
+;(function($) {
+    $(document).on('focus', '.form-date', function() {
+
+        if ( ! $(this).hasClass('hasDatepicker')) {
+
+            var datepicker = $(this).datepicker({
+                beforeShow: function(input, inst) {
+                    if ($(this).attr('data-no-year')) {
+                        inst.dpDiv.addClass('NoYearDatePicker');
+                    }
+                },
+                onClose: function(dateText, inst){
+                    if ($(this).attr('data-no-year')) {
+                        inst.dpDiv.removeClass('NoYearDatePicker');
+                    }
+                },
+                dateFormat: $(this).attr('data-display-format'),
+                changeMonth: true,
+                defaultDate: null,
+                changeYear: $(this).attr('data-can-change-year'),
+                yearRange: $(this).attr('data-year-range'),
+                altField: '#' + $(this).attr('id') + '-alt',
+                altFormat: 'yy-mm-dd',
+                maxDate: $(this).attr('data-max-date'),
+                minDate: $(this).attr('data-min-date')
+            });
+
+            var altField = $('#' + $(this).attr('id') + '-alt');
+            if (altField.length === 0) {
+                var altDate = $.datepicker.formatDate('yy-mm-dd', new Date(datepicker.datepicker('getDate')));
+                altField.remove();
+                $(this).before('<input type="hidden" name="' + $(this).attr('name') + '" id="' + $(this).attr('id') + '-alt" value="' + altDate + '">');
+                $(this).attr('name', 'ignore-' + $(this).attr('name'));
+            }
+
+            $(this).change(function() {
+                if (!$(this).val()) $('#' + $(this).attr('id') + '-alt').val('');
+                console.log($(this).val());
+            });
+
+            $(this).datepicker('show');
+        }
+    });
+})(jQuery);

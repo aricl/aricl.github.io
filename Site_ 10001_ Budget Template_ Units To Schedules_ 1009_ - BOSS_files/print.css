@@ -1,0 +1,6 @@
+
+#topheader, header, footer {display:none !important;}
+html, body, #wrapper, table, table.layout, tr.content, .content td, .content-box  {height:auto !important;}
+.content-box-inner {position:relative !important;overflow:visible !important;position:relative !important;}
+.dataTables_scrollBody, .dataTables_scroll {overflow:visible !important;height:auto !important;}
+
